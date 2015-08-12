@@ -562,7 +562,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         if(run.terminate=='Y')
 	    break;
     }
-    mexPrintf("\nFinished, converge after %d iterations\n\n",t);
+    if(t==input.MaxIt)
+        mexPrintf("\nReached maximal iteration number: %d iterations\n\n",t);
+    else
+	mexPrintf("\nFinished, converge after %d iterations\n\n",t);
     mv.T=t;
     WriteOutput(nlhs,plhs,input.n,&pic,&mv,input.seed,input.bsize);
     FreeMem(&run,&input,&mv,&pic,&pic0);
