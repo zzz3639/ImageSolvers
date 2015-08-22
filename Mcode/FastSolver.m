@@ -1,4 +1,4 @@
-function [ pic, no, mv ] = fastsolver( Img, NumMol, Lambda, OptPara, Tolerance, ProcessPara )
+function [ pic, no, mv ] = FastSolver( Img, NumMol, Lambda, OptPara, Tolerance, ProcessPara )
 %REVERSELASSO Summary of this function goes here
 % Modified by Zhang Haowen in 2015.08.19
 % Input variables:
