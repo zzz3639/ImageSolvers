@@ -1,8 +1,8 @@
 clc;
 clear;
 c=0;
+SavePath=uigetdir(pwd,'Pick a folder to save to');
 while c==0
-    clear;
     c=0;
     m=11;
     n=11;
@@ -15,10 +15,10 @@ while c==0
         ImageArea=importdata([pname,fname]);
     end
     [Sigma,XYITlist,PeakList,Goldset]=SigmaFittingProcess(ImageArea,0,0);
-    save([fname(1:end-4),'Area.mat'],'ImageArea');
-    save([fname(1:end-4),'Peak.mat'],'PeakList');
-    save([fname(1:end-4),'XYIT.mat'],'XYITlist');
-    save([fname(1:end-4),'Gold.mat'],'Goldset');
+    save([SavePath,'/',fname(1:end-4),'Area.mat'],'ImageArea');
+    save([SavePath,'/',fname(1:end-4),'Peak.mat'],'PeakList');
+    save([SavePath,'/',fname(1:end-4),'XYIT.mat'],'XYITlist');
+    save([SavePath,'/',fname(1:end-4),'Gold.mat'],'Goldset');
     L=length(Goldset);
     Perm=randperm(L);
     k=1;
