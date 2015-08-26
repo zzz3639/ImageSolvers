@@ -1,7 +1,7 @@
 P=pwd;
 P1=[P,'/MexFile'];
 P2=[P,'/Mcode'];
-P3=[P,'/PSFfitting']
+P3=[P,'/PSFfitting'];
 addpath(P1);
 addpath(P2);
 addpath(P3);
