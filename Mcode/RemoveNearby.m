@@ -5,12 +5,12 @@ function [ ansPic ] = RemoveNearby( Pic, Th )
 %   First two columns of Pic correspond to positions. Pic can contain other
 % information in the following columns.
 [up,vp]=sort(Pic(:,1));
-PicSort=Pic(vp,:);
+Pic=Pic(vp,:);
 n=size(Pic,1);
 Remove=zeros(n,1);
 Th2=Th*Th;
 for i=1:n
-    for j=i:n
+    for j=i+1:n
         if Pic(j,1)>Pic(i,1)+Th
             break;
         end
