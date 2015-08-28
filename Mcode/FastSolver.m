@@ -1,12 +1,15 @@
 function [ pic, no, mv ] = FastSolver( Img, NumMol, Lambda, OptPara, Tolerance, ProcessPara )
 %REVERSELASSO Summary of this function goes here
 % Modified by Zhang Haowen in 2015.08.19
+% Usage: [ pic, no, mv ] = FastSolver( Img, NumMol, Lambda, OptPara, Tolerance, ProcessPara )
 % Input variables:
 %   Img: m by n matrix, raw image
 %   NumMol: number of initial molecules, before merge. Integer
 %   Lambda: Lambda for the optimization.
 %   OptPara: [Sigma, BoundarySize, PSFdecay];
-%   Tolerance: [MaxIte0, MaxIte, Izero, Pzero]. 
+%   Tolerance: [MaxIte0, MaxIte, Izero, Pzero]
+%      MaxIte0: Maximal iteration number of the first SparseGMM run
+%      MaxIte: Maximal iteration number of the second SparseGMM run
 %      Izero: minimal Intensity change.
 %      Pzero: minimal Position change.
 %   ProcessPara: [MergeDist, MolZero]

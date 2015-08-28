@@ -21,7 +21,7 @@ cx2=[0:s2-1];
 cx2=repmat(cx2,s1,1);
 cx=[reshape(cx2,s1*s2,1),reshape(cx1,s1*s2,1)];
 % define output variable
-Img=cell(2,1);
+Img=cell(m,1);
 
 %%% generate poisson images
 for i=1:m
