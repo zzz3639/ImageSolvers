@@ -6,8 +6,10 @@ function [ NoScale ] = NoiseEst(Img, Sigma, NTrial, Lambda0)
 MaxIte0=500;
 MaxIteFast=5000;
 MaxIteTunning=5000;
-Izero=sum(sum(Img))*1e-5;
-Pzero=sum(sum(Img))*1e-4;
+IzeroSolver=sum(sum(Img))*1e-5;
+PzeroSolver=1e-4;
+IzeroTrial=sum(sum(Img))*1e-5;
+PzeroTrial=1e-5;
 bsize=4;
 bdecay=5;
 MergeDist=0.1;
@@ -19,37 +21,58 @@ rng('shuffle');
 S1=size(Img,1);
 S2=size(Img,2);
 NumMol=floor(size(Img,1)*size(Img,2)/50*20);
-cx1=[0:S1-1]';
-cx1=repmat(cx1,1,S2);
-cx2=[0:S2-1];
-cx2=repmat(cx2,S1,1);
-cx=[reshape(cx2,S1*S2,1),reshape(cx1,S1*S2,1)];
 SearchMin=0;
 SearchMax=0.5;
 SearchBar=0.02;
 
 %%% Run RunSolverTunning.m and get squared error
-[Pic,NoB]=RunSolverTunning(Img, NumMol, Lambda0, [Sigma,bsize,bdecay], ...
-[MaxIte0,MaxIteFast,Izero,Pzero], [MaxIteTunning,Izero,Pzero], ...
+[Pic,No,Error]=ErrorEst(Img, NumMol, Lambda0, [Sigma,bsize,bdecay], ...
+[MaxIte0,MaxIteFast,IzeroSolver,PzeroSolver], [MaxIteTunning,IzeroSolver,PzeroSolver], ...
 [MergeDist*Sigma,MolZero], [MergeDist*Sigma,MolZero,FoldRemain]);
-
-n=size(Pic,1);
-No=NoB/(S1+2*bsize)/(S2+2*bsize)*S1*S2;
-ImgReal=ones(S1*S2,1)*No/S1/S2;
-for i=1:n
-    ImgReal=ImgReal+PSF(Pic(i,1:2),cx,Sigma);
-end
-ImgReal=reshape(ImgReal,S1,S2);
-Error2=sum(sum((Img-ImgReal).^2));
 
 %%% Estimate NoiseScale by binary search and SiliconImaging
 while SearchMax-SearchMin>SearchBar
     ObNoise=(SearchMax+SearchMin)/2;
-    [ImgSilicon] = SiliconImaging(NTrial, [S1,S2], Pic, No, Sigma);
+    [ImgSilicon] = SiliconImaging(NTrial, [S1,S2], Pic, No, Sigma,ObNoise);
+    ErrorThisAve=0;
     for i=1:NTrial
+        [PicThis,NoThis,ErrorThis]=ErrorEst(ImgSilicon{i},NumMol, Lambda0, [Sigma,bsize,bdecay], ...
+        [MaxIte0,MaxIteFast,IzeroTrial,PzeroTrial], [MaxIteTunning,IzeroTrial,PzeroTrial], ...
+        [MergeDist*Sigma,MolZero], [MergeDist*Sigma,MolZero,FoldRemain]);
+        ErrorThisAve=ErrorThisAve+ErrorThis;
+    end
+    ErrorThisAve=ErrorThisAve/NTrial;
+    if Error>ErrorThisAve
+        SearchMin=ObNoise;
+    else
+        SearchMax=ObNoise;
     end
 end
 
+NoScale=(SearchMax+SearchMin)/2;
+
+end
+
+function [Pic,No,Error]=ErrorEst(Img,NumMol,Lambda0,OptPara,StopPara1,StopPara2,ProcessingPara1,ProcessingPara2)
+    S1=size(Img,1);
+    S2=size(Img,2);
+    bsize=OptPara(2);
+    Sigma=OptPara(1);
+    cx1=[0:S1-1]';
+    cx1=repmat(cx1,1,S2);
+    cx2=[0:S2-1];
+    cx2=repmat(cx2,S1,1);
+    cx=[reshape(cx2,S1*S2,1),reshape(cx1,S1*S2,1)];
+    [Pic,NoB]=RunSolverTunning(Img,NumMol,Lambda0,OptPara,StopPara1,StopPara2,ProcessingPara1,ProcessingPara2);
+
+    n=size(Pic,1);
+    No=NoB/(S1+2*bsize)/(S2+2*bsize)*S1*S2;
+    ImgReal=ones(S1*S2,1)*No/S1/S2;
+    for i=1:n
+        ImgReal=ImgReal+Pic(i,3)*PSF(Pic(i,1:2),cx,Sigma);
+    end
+    ImgReal=reshape(ImgReal,S1,S2);
+    Error=sum(sum((Img-ImgReal).^2));
 end
 
 function b2=Noise(s1,s2,PhotonNum)
