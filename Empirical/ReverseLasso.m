@@ -6,7 +6,8 @@ function [ Results, IniMv ] = ReverseLasso( Img, NumMol, LambdaPath, OptPara, To
 %   NumMol: number of initial molecules, before merge.
 %   LambdaPath: Lambdas we want to try. Example: [0.02:0.02:0.3];
 %   OptPara: [Sigma, BoundarySize, PSFdecay];
-%   Tolerance: [MaxIte, Izero, Pzero]. 
+%   Tolerance: [MaxIteNode, Izero, Pzero]. 
+%      MaxIteNode: Maximal iteration number of each lambda value in LambdaPath
 %      Izero: minimal Intensity change.
 %      Pzero: minimal Position change.
 %   ProcessPara: [MergeDist, MolZero]

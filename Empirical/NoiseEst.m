@@ -1,4 +1,4 @@
-function [ NoScale ] = NoiseEst(Img, Sigma, NTrial, Lambda0)
+function [NoScale, Pic, No] = NoiseEst(Img, Sigma, NTrial, Lambda0)
 %NOISEEST Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -20,7 +20,7 @@ FoldRemain=0.9999;
 rng('shuffle');
 S1=size(Img,1);
 S2=size(Img,2);
-NumMol=floor(size(Img,1)*size(Img,2)/50*20);
+NumMol=floor(size(Img,1)*size(Img,2)/50/Sigma/Sigma*20);
 SearchMin=0;
 SearchMax=0.5;
 SearchBar=0.02;
