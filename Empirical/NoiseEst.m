@@ -14,7 +14,7 @@ bsize=4;
 bdecay=5;
 MergeDist=0.1;
 MolZero=0.5;
-FoldRemain=0.9999;
+FoldRemain=0.99;
 
 %%% Initialize
 rng('shuffle');

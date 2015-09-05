@@ -1,6 +1,6 @@
 function [Losses] = EmpiricalLoss( Img, Sigma, EstPara, PathPara, LambdaPath )
 %EMPIRICALLOSS Summary of this function goes here
-%Usage: [ output_args ] = EmpiricalLoss(Img,Sigma,[Lambda0,N_Est],[Nrepeats,MaxIteNode,IzeroNode,PzeroNode],LambdaPath)
+%Usage: [Losses] = EmpiricalLoss(Img,Sigma,[Lambda0,N_Est],[Nrepeats,MaxIteNode,IzeroNode,PzeroNode],LambdaPath)
 
 %%% Initialize
 Nrepeats=PathPara(1);
@@ -15,6 +15,7 @@ bsize=4;
 bdecay=5;
 MergeDist=0.1;
 MolZero=0.5;
+FilterFold=0.75;
 
 %%% Estimate molecule list and noise scale
 [NoScale, Pic, No] = NoiseEst(Img, Sigma, EstPara(2), EstPara(1));
@@ -28,9 +29,23 @@ for t=1:Nrepeats
     [ResultsPath] = ReverseLasso(ImgSilicon{t}, NumMol, LambdaPath, [Sigma,bsize,bdecay], ...
     [MaxIteNode,IzeroNode,PzeroNode], [MergeDist*Sigma,MolZero]);
     for i=1:n
-        AlighThis=MolListAlign(ResultsPath{i}.pic,Pic);
+        PicThis=ResultsPath{i}.pic;
+        AlighThis=MolListAlign([PicThis(:,1:2),Ints2Prob(PicThis(:,3),FilterFold)],Pic);
+        Recover=zeros(size(Pic,1),1);
+        for j=1:size(AlighThis,1)
+            Recover(AlighThis(j,7))=Recover(AlighThis(j,7))+AlighThis(j,3);
+        end
+        RecoverValue=0;
+        for j=1:size(Pic,1)
+            if Recover(j)>1
+                RecoverValue=RecoverValue+1/Recover(j);
+            else
+                RecoverValue=RecoverValue+Recover(j);
+            end
+        end
+        RecoverValue=RecoverValue/size(Pic,1);
         E=sum(AlighThis(:,3).*AlighThis(:,4))/sum(AlighThis(:,3));
-        Losses(i)=Losses(i)+E;
+        Losses(i)=Losses(i)+E/RecoverValue;
     end
 end
 
