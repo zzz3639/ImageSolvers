@@ -3,6 +3,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<math.h>
+#include"stdbool.h"
 
 #define DoubleZero 1e-10
 #ifndef M_PI
@@ -28,6 +29,7 @@ struct RUN{
     double sig;
     int bsize;
     int psfdecay;
+    double lambda;
     double Pzero;
     double Izero;
     int s1;
@@ -75,7 +77,7 @@ struct CPtable
     double *LambdaX;
     double *LogMuX;
     double *LogLambdaX;
-    double **CPtable;
+    double **cptable;
 };
 
 void Sparse_malloc(struct Sparse *Sp, int n);
@@ -84,11 +86,12 @@ void State_malloc(struct State *St, int n);
 void State_free(struct State *St);
 void RUN_free(struct RUN *R);
 void CPtable_malloc(struct CPtable *CP, int NumLambda, int NumMu);
-void CPtalbe_free(struct CPtable *CP);
+void CPtable_free(struct CPtable *CP);
 void CPtable_prepare(struct CPtable *CP);
 double calibrated_poisson(double Lambda, double Mu, struct CPtable *CP);
 void PSFGauss(struct Sparse *A, struct RUN *run, int L1, int U1, int L2, int U2, double x, double y, double sigma, int psfdecay);
-void RunStep(struct RUN *run, struct State *pic, struct State *pic0);
+void PSFno(double *An, int sbs, double no);
+void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool PositionFix, bool DoCalibration, struct CPtable *CP);
 
 
 #endif

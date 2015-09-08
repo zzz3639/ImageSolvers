@@ -1,31 +1,17 @@
 /* Modified in 2015.07.10 by ZHANG Haowen
    Do SparseGMM fitting by EM algorithm
-   Positions are fixed
 */
 #include"mex.h"
+#include"EMfunctions.h"
 #include<math.h>
 #include<stdio.h>
 #include<stdlib.h>
 #include<time.h>
 #include<string.h>
 
-#ifndef M_PI
-    #define M_PI 3.14159265358979323846
+#ifndef PosFix
+    #define PosFix false
 #endif
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
-#define Zero 1e-1
-#define MZero 1e-8
-
-#define Expmin 32
-#define Expinterval 1024 
-
-struct Sparse{
-    int n;
-    short *X;
-    short *Y;
-    double *V;
-};
 
 struct InType{
     int s1;
@@ -38,39 +24,11 @@ struct InType{
     double Izero;
     double lambda;
     int bsize;
-    int bdecay;
+    int psfdecay;
     long int interval;
     long int seed;
 };
-struct State{
-    double no;
-    double *X;
-    double *Y;
-    double *I;
-};
-struct RUN{
-    int n;
-    int s1;
-    int s2;
-    int sb1;
-    int sb2;
-    int ss;
-    int sbs;
-    double *bb;  /*Image with a bdecay size boundary*/
-    bool *bound; /*Belongs to boundary or not*/
-    struct Sparse *W;  /*Record PSF*/
-    struct Sparse *w;
-    double *Wn;  /*PSF of noise*/
-    double *S;  
-    double Int;
-    char terminate;
-    double *exptable; /*Accelerate exp function*/
-    double *expx;
-    double *X;  /*spots locations from last iteration*/
-    double *Y;
-    bool *die;  /*spots with an intensity zero*/
-    bool *freeze; /*spots didn't move from past few iterations*/
-};
+
 struct MV{
     int T;
     int P;
@@ -80,65 +38,6 @@ struct MV{
     double *no;
 };
 
-
-
-
-/*Here A should be pre-allocated*/
-void PSF(struct Sparse *A, struct RUN *run, int L1, int U1, int L2, int U2, double x, double y, double sigma, int bdecay) 
-{
-    int i,j,k;
-    int cx,cy,l1,l2,u1,u2;
-    cx=(int)(floor(x)+0.5);
-    cy=(int)(floor(y)+0.5);
-    l1=MAX(L1,cx-bdecay);
-    l2=MAX(L2,cy-bdecay);
-    u1=MIN(U1+1,cx+bdecay+2);
-    u2=MIN(U2+1,cy+bdecay+2);
-    A->n=0;
-    if(u1-l1<1){
-	return;
-    }
-    if(u2-l2<1){
-	return;
-    }
-    double a,b;
-    double Dx,Dy;
-    double dxinv=(double)Expinterval;
-    a=1.0/(2*M_PI*sigma*sigma);
-    b=1.0/(2*sigma*sigma);
-    int D;
-    int expup=Expmin*Expinterval-1;
-    double d,dd;
-    for(i=l1;i<u1;i++){
-	for(j=l2;j<u2;j++){
-	    A->X[A->n]=i;
-	    A->Y[A->n]=j;
-	    Dx=i-x;
-	    Dy=j-y;
-	    d=-b*(Dx*Dx+Dy*Dy);
-	    D=(int)(-d*dxinv);
-	    if(D>expup){
-		A->V[A->n]=0.0;
-	    }
-	    else{
-		dd=d-run->expx[D];
-		A->V[A->n]=a*run->exptable[D]*(1.0+dd);
-	    }
-	    (A->n)++;
-	}
-    }
-    return;
-}
-
-/*no is the intensity of noise, scale it here to get better speed*/
-void PSFno(double *An, int sbs, double no)
-{
-    double x=no/sbs;
-    sbs-=1;
-    for(;sbs>-1;sbs-=1)
-        An[sbs]=x;
-    return;
-}
 
 void ReadInput(int nrhs ,const mxArray *prhs[], struct InType *input)
 {
@@ -169,7 +68,7 @@ void ReadInput(int nrhs ,const mxArray *prhs[], struct InType *input)
 /*reading boundary size;*/
     input->bsize=(int)(*(mxGetPr(prhs[4]))+0.5);
 /*reading PSF range;*/
-    input->bdecay=(int)(*(mxGetPr(prhs[5]))+0.5);
+    input->psfdecay=(int)(*(mxGetPr(prhs[5]))+0.5);
 /*reading lambda;*/
     input->lambda=*(mxGetPr(prhs[6]));
 /*reading interval length*/
@@ -253,7 +152,7 @@ void PrintInput(struct InType *input)
 {
     mexPrintf("\nInput data and parameters:\n");
     mexPrintf("Picture parameters: s=%d*%d\n",input->s1,input->s2);
-    mexPrintf("Optimization parameters: n=%d, sigma=%f, boundary size=%d, PSF range=%d, lambda=%f\n", input->n,input->sig,input->bsize,input->bdecay,input->lambda);
+    mexPrintf("Optimization parameters: n=%d, sigma=%f, boundary size=%d, PSF range=%d, lambda=%f\n", input->n,input->sig,input->bsize,input->psfdecay,input->lambda);
     mexPrintf("Stop criterion: Max iteration number=%d, Intensity stop criterion=%e, Position stop criterion=%e\n",input->MaxIt,input->Izero,input->Pzero);
     mexPrintf("Save every %ld iterations\n",input->interval);
     mexPrintf("Random Seed=%ld\n\n",input->seed);
@@ -264,6 +163,12 @@ void Initialize(struct InType *input, struct RUN *R)
 {
     mexPrintf("\nStart to initialize\n");
     R->n=input->n;
+    R->lambda=input->lambda;
+    R->sig=input->sig;
+    R->bsize=input->bsize;
+    R->psfdecay=input->psfdecay;
+    R->Izero=input->Izero;
+    R->Pzero=input->Pzero;
     R->s1=input->s1;
     R->s2=input->s2;
     R->ss=input->s1*input->s2;
@@ -294,13 +199,13 @@ void Initialize(struct InType *input, struct RUN *R)
     R->w =(struct Sparse *)malloc(sizeof(struct Sparse)*R->n);
     for(i=0;i<R->n;i++){
 	R->W[i].n=0;
-	R->W[i].X=(short *)malloc(sizeof(short)*(2+2*input->bdecay)*(2+2*input->bdecay));
-	R->W[i].Y=(short *)malloc(sizeof(short)*(2+2*input->bdecay)*(2+2*input->bdecay));
-	R->W[i].V=(double *)malloc(sizeof(double)*(2+2*input->bdecay)*(2+2*input->bdecay));
+	R->W[i].X=(short *)malloc(sizeof(short)*(2+2*input->psfdecay)*(2+2*input->psfdecay));
+	R->W[i].Y=(short *)malloc(sizeof(short)*(2+2*input->psfdecay)*(2+2*input->psfdecay));
+	R->W[i].V=(double *)malloc(sizeof(double)*(2+2*input->psfdecay)*(2+2*input->psfdecay));
 	R->w[i].n=0;
-	R->w[i].X=(short *)malloc(sizeof(short)*(2+2*input->bdecay)*(2+2*input->bdecay));
-	R->w[i].Y=(short *)malloc(sizeof(short)*(2+2*input->bdecay)*(2+2*input->bdecay));
-	R->w[i].V=(double *)malloc(sizeof(double)*(2+2*input->bdecay)*(2+2*input->bdecay));
+	R->w[i].X=(short *)malloc(sizeof(short)*(2+2*input->psfdecay)*(2+2*input->psfdecay));
+	R->w[i].Y=(short *)malloc(sizeof(short)*(2+2*input->psfdecay)*(2+2*input->psfdecay));
+	R->w[i].V=(double *)malloc(sizeof(double)*(2+2*input->psfdecay)*(2+2*input->psfdecay));
     }
     R->terminate='N';
     R->exptable=(double *)malloc(sizeof(double)*Expmin*Expinterval);
@@ -328,140 +233,12 @@ void Initialize(struct InType *input, struct RUN *R)
     return;
 }
 
-void RunStep(struct RUN *run, struct InType *input, struct State *pic, struct State *pic0)
-{
-    int i,j;
-    int n=input->n;
-    int s1=input->s1;
-    int s2=input->s2;
-    int bsize=input->bsize;
-    double *bb=run->bb;
-    bool *bound=run->bound;
-    double *S=run->S;
-    struct Sparse *W=run->W;
-    double *Wn=run->Wn;
-    int sb1=run->sb1;
-    int sb2=run->sb2;
-    int sbs=run->sbs;
-    bool *die=run->die;
-    bool *freeze=run->freeze;
-/*Estep*/
-    /*reset the picture and S*/
-    for(i=0;i<sbs;i++){
-	S[i]=0;
-    }
-    double mp;
-    struct Sparse *sp,*ssp;
-    /*PSF calculation*/
-    for(i=0;i<n;i++){
-	if(die[i])
-	    continue;
-	if(freeze[i]){
-	}
-	else{
-	    PSF(run->w+i, run,0,sb1-1,0,sb2-1,pic->X[i],pic->Y[i],input->sig,input->bdecay);
-	}
-	ssp=run->w+i;
-	sp=W+i;
-	sp->n=ssp->n;
-	for(j=0;j<ssp->n;j++){
-	    sp->X[j]=ssp->X[j];
-	    sp->Y[j]=ssp->Y[j];
-	    sp->V[j]=ssp->V[j]*pic->I[i];
-	}
-    }
-    /*Sum up PSFs*/
-    double c;
-    double scale=0;
-    int ind;
-    for(i=0;i<n;i++){
-	if(die[i])
-	    continue;
-	sp=W+i;
-	for(j=0;j<sp->n;j++){
-	    ind=sp->X[j]+sp->Y[j]*sb1;
-	    c=sp->V[j];
-	    S[ind]+=c;
-	    if(bound[ind]){
-		continue;
-	    }
-	    scale+=c;
-	}
-    }
-    PSFno(Wn,sbs,pic->no);
-    scale+=pic->no/sbs*s1*s2;
-    /*reconstruct the hidden part of the picture*/
-    scale=run->Int/scale;
-    double Sinv[sbs];
-    double nosum=0;
-    for(i=0;i<sbs;i++){
-        S[i]+=Wn[i];
-	if(bound[i]){
-	    bb[i]=S[i];
-	}
-	Sinv[i]=1.0/S[i];
-	Wn[i]*=Sinv[i]*bb[i];
-        nosum+=Wn[i];
-    }
-    
-    /*update W,Wn to image based PSF*/
-    double O[n];
-    for(i=0;i<n;i++){
-	if(die[i])
-	    continue;
-	sp=W+i;
-        O[i]=0;
-	for(j=0;j<sp->n;j++){
-	    ind=sp->X[j]+sp->Y[j]*sb1;
-	    sp->V[j]*=Sinv[ind]*bb[ind];
-            O[i]+=sp->V[j];
-	}
-    }
-/*copy pic to pic0*/
-    pic0->no=pic->no;
-    for(i=0;i<input->n;i++){
-	if(die[i])
-	    continue;
-	pic0->I[i]=pic->I[i];
-    }
-/*Mstep*/
-    /*update intensity(np,nosum, O[n])*/
-    double Iinv=1.0/(1.0+input->lambda);
-    pic->no=nosum;
-    for(i=0;i<n;i++){
-	if(die[i])
-	    continue;
-	pic->I[i]=O[i]*Iinv;
-    }
-    for(i=0;i<n;i++){
-	if(O[i]<Zero){
-	    die[i]=true;
-	    continue;
-	}
-    }
-/*Check stop criterion*/
-    double errI=fabs(pic->no-pic0->no);
-    for(i=0;i<n;i++){
-	if(die[i])
-	    continue;
-	errI+=fabs(pic->I[i]-pic0->I[i]);
-	freeze[i]=true;
-    }
-    if(errI<input->Izero){
-	run->terminate='Y';
-    }
-    return;
-}
 
 void FreeMem(struct RUN *run, struct InType *input, struct MV *mv, struct State *pic, struct State *pic0)
 {
 /*free mv and pic, pic0;*/
-    free(pic0->X);
-    free(pic0->Y);
-    free(pic0->I);
-    free(pic->X);
-    free(pic->Y);
-    free(pic->I);
+    State_free(pic0);
+    State_free(pic);
     int i;
     for(i=0;i<mv->P;i++){
 	free(mv->X[i]);
@@ -475,34 +252,15 @@ void FreeMem(struct RUN *run, struct InType *input, struct MV *mv, struct State 
 /*free input*/
     free(input->b);
 /*free run*/
-    free(run->bb);
-    free(run->bound);
-    free(run->Wn);
-    free(run->S);
-    free(run->exptable);
-    free(run->expx);
-    free(run->X);
-    free(run->Y);
-    free(run->die);
-    free(run->freeze);
-    for(i=0;i<input->n;i++){
-	free(run->W[i].X);
-	free(run->W[i].Y);
-	free(run->W[i].V);
-	free(run->w[i].X);
-	free(run->w[i].Y);
-	free(run->w[i].V);
-    }
-    free(run->W);
-    free(run->w);
+    RUN_free(run);
 
     return;
 }
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-    if(nrhs!=9){
-        mexErrMsgTxt("\nparameter number incorrect!\nUsage:\n  [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,bdecay,Lambda,[int64(NIte)],MV0)\n");
+    if(nrhs!=8&&nrhs!=9){
+        mexErrMsgTxt("\nparameter number incorrect!\nUsage:\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,Lambda,[int64(NIte)])\nOr\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,Lambda,[NIte,Seed])\nOr\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,Lambda,[int64(NIte)],MV0)\n");
         return;
     }
     struct InType input;
@@ -520,27 +278,41 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
 /*allocate pic0, pic*/
     struct State pic0,pic;
-    pic.X=(double*)malloc(sizeof(double)*input.n);
-    pic.Y=(double*)malloc(sizeof(double)*input.n);
-    pic.I=(double*)malloc(sizeof(double)*input.n);
-    pic0.X=(double*)malloc(sizeof(double)*input.n);
-    pic0.Y=(double*)malloc(sizeof(double)*input.n);
-    pic0.I=(double*)malloc(sizeof(double)*input.n);
+    State_malloc(&pic, input.n);
+    State_malloc(&pic0,input.n);
 
     int i,j,k,t;
 /*Initialize pic*/
     {
-	mxArray *pv;
-	double *mvint;
-	pv=mxGetField(prhs[8],0,"no");
-	mvint=mxGetPr(pv);
-	pic.no=*mvint;
-	pv=mxGetField(prhs[8],0,"pic");
-	mvint=mxGetPr(pv);
-	for(i=0;i<input.n;i++){
-	    pic.Y[i]=*(mvint+i)+input.bsize;
-	    pic.X[i]=*(mvint+i+input.n)+input.bsize;
-	    pic.I[i]=*(mvint+i+input.n+input.n);
+        if(nrhs==8){
+	    if(input.seed<0){
+		srand(clock());
+		input.seed=time(NULL)+rand();
+		srand(input.seed);
+	    }
+	    else
+		srand(input.seed);
+	    double x=1.0/(input.n+1);
+	    pic.no=x;
+	    for(i=0;i<input.n;i++){
+		pic.X[i]=1.0*rand()/RAND_MAX*(input.s1-1)+input.bsize;
+		pic.Y[i]=1.0*rand()/RAND_MAX*(input.s2-1)+input.bsize;
+		pic.I[i]=x;
+	    }
+	}
+	else{
+	    mxArray *pv;
+	    double *mvint;
+	    pv=mxGetField(prhs[8],0,"no");
+	    mvint=mxGetPr(pv);
+	    pic.no=*mvint;
+	    pv=mxGetField(prhs[8],0,"pic");
+	    mvint=mxGetPr(pv);
+	    for(i=0;i<input.n;i++){
+		pic.Y[i]=*(mvint+i)+input.bsize;
+		pic.X[i]=*(mvint+i+input.n)+input.bsize;
+		pic.I[i]=*(mvint+i+input.n+input.n);
+	    }
 	}
     }
     PrintInput(&input);
@@ -563,7 +335,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	    mv.P++;
 	}
     /*Run EM*/
-	RunStep(&run,&input,&pic,&pic0);
+	RunStep(&run,&pic,&pic0,PosFix,false,NULL);
     /*Judge break or not*/
         if(run.terminate=='Y')
 	    break;

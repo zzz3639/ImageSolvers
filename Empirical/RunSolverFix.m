@@ -11,7 +11,7 @@ bdecay=OptPara(3);
 s1=size(bm,1);
 s2=size(bm,2);
 
-[pic,no,mv]=EMFixSmoothMex(bm,n,sigma,StopPara,bsize,bdecay,0,[int64(10000)],mv0);
+[pic,no,mv]=EMFixSmoothMex(bm,n,sigma,StopPara,bsize,bdecay,0,[int64(1)],mv0);
 
 end
 

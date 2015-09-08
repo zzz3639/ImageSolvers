@@ -34,8 +34,9 @@ void State_free(struct State *St)
     return;
 }
 
-void RUN_free(struct RUN *R)
+void RUN_free(struct RUN *run)
 {
+    int i;
     free(run->bb);
     free(run->bound);
     free(run->Wn);
@@ -46,7 +47,7 @@ void RUN_free(struct RUN *R)
     free(run->Y);
     free(run->die);
     free(run->freeze);
-    for(i=0;i<input->n;i++){
+    for(i=0;i<run->n;i++){
 	free(run->W[i].X);
 	free(run->W[i].Y);
 	free(run->W[i].V);
@@ -68,14 +69,14 @@ void CPtable_malloc(struct CPtable *CP, int NumLambda, int NumMu)
     CP->LogMuX=(double *)malloc(sizeof(double)*NumMu);
     CP->LogLambdaX=(double *)malloc(sizeof(double)*NumLambda);
     int i;
-    CP->CPtable=(double **)malloc(sizeof(double *)*NumLambda);
+    CP->cptable=(double **)malloc(sizeof(double *)*NumLambda);
     for(i=0;i<NumLambda;i++){
-        CP->CPtable[i]=(double *)malloc(sizeof(double)*NumMu);
+        CP->cptable[i]=(double *)malloc(sizeof(double)*NumMu);
     }
     return;
 }
 
-void CPtalbe_free(struct CPtable *CP)
+void CPtable_free(struct CPtable *CP)
 {
     free(CP->MuX);
     free(CP->LambdaX);
@@ -83,9 +84,9 @@ void CPtalbe_free(struct CPtable *CP)
     free(CP->LogLambdaX);
     int i;
     for(i=0;i<CP->NumLambda;i++){
-        free(CP->CPtable[i]);
+        free(CP->cptable[i]);
     }
-    free(CP->CPtable);
+    free(CP->cptable);
     return;
 }
 
@@ -132,8 +133,8 @@ double  calibrated_poisson(double Lambda, double Mu, struct CPtable *CP)
     LogMuInCell = (LogMu - CP->LogMuX[MuCell]) / CP->LogStepMu;
     LogLambdaInCell = (LogLambda - CP->LogLambdaX[LambdaCell]) / CP->LogStepLambda;
     double ans;
-    ans= CP->CPtable[LambdaCell][MuCell]*(1-LogLambdaInCell)*(1-LogMuInCell) + CP->CPtable[LambdaCell][MuCell+1]*(1-LogLambdaInCell)*LogMuInCell
-	+ CP->CPtable[LambdaCell+1][MuCell]*LogLambdaInCell*(1-LogMuInCell) + CP->CPtable[LambdaCell+1][MuCell+1]*LogLambdaInCell*LogMuInCell;
+    ans= CP->cptable[LambdaCell][MuCell]*(1-LogLambdaInCell)*(1-LogMuInCell) + CP->cptable[LambdaCell][MuCell+1]*(1-LogLambdaInCell)*LogMuInCell
+	+ CP->cptable[LambdaCell+1][MuCell]*LogLambdaInCell*(1-LogMuInCell) + CP->cptable[LambdaCell+1][MuCell+1]*LogLambdaInCell*LogMuInCell;
     return ans;
 }
 
@@ -185,16 +186,27 @@ void PSFGauss(struct Sparse *A, struct RUN *run, int L1, int U1, int L2, int U2,
     return;
 }
 
+
+/*no is the intensity of noise, scale it here to get better speed*/
+void PSFno(double *An, int sbs, double no)
+{
+    double x=no/sbs;
+    sbs-=1;
+    for(;sbs>-1;sbs-=1)
+        An[sbs]=x;
+    return;
+}
+
 /*Run one EM iteration.*/ 
 /*If PositionFix==true, then Molecule positions will not upgrade*/
-void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool PositionFix)
+void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool PositionFix, bool DoCalibration, struct CPtable *CP)
 {
     int i,j;
     int n=run->n;
     int s1=run->s1;
     int s2=run->s2;
     int bsize=run->bsize;
-    double *bb=run->bb;
+    double *bb;
     bool *bound=run->bound;
     double *S=run->S;
     struct Sparse *W=run->W;
@@ -204,6 +216,10 @@ void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool Positi
     int sbs=run->sbs;
     bool *die=run->die;
     bool *freeze=run->freeze;
+/*Initialize*/
+    bb=(double *)malloc(sizeof(double)*sbs);
+    for(i=0;i<sbs;i++)
+	bb[i]=run->bb[i];
 /*Estep*/
     /*reset the picture and S*/
     for(i=0;i<sbs;i++){
@@ -231,7 +247,6 @@ void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool Positi
     }
     /*Sum up PSFs*/
     double c;
-    double scale=0;
     int ind;
     for(i=0;i<n;i++){
 	if(die[i])
@@ -244,13 +259,10 @@ void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool Positi
 	    if(bound[ind]){
 		continue;
 	    }
-	    scale+=c;
 	}
     }
     PSFno(Wn,sbs,pic->no);
-    scale+=pic->no/sbs*s1*s2;
     /*reconstruct the hidden part of the picture*/
-    scale=run->Int/scale;
     double *Sinv;
     Sinv=(double *)malloc(sizeof(double)*sbs);
     double nosum=0;
@@ -258,6 +270,11 @@ void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool Positi
         S[i]+=Wn[i];
 	if(bound[i]){
 	    bb[i]=S[i];
+	}
+	else{
+	    if(DoCalibration){
+		bb[i]=calibrated_poisson(S[i],bb[i],CP);
+	    }
 	}
 	Sinv[i]=1.0/S[i];
 	Wn[i]*=Sinv[i]*bb[i];
@@ -286,7 +303,7 @@ void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool Positi
     }
 /*copy pic to pic0*/
     pic0->no=pic->no;
-    for(i=0;i<input->n;i++){
+    for(i=0;i<run->n;i++){
 	if(die[i])
 	    continue;
 	pic0->X[i]=pic->X[i];
@@ -295,7 +312,7 @@ void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool Positi
     }
 /*Mstep*/
     /*update intensity(np,nosum, O[n])*/
-    double Iinv=1.0/(1.0+input->lambda);
+    double Iinv=1.0/(1.0+run->lambda);
     pic->no=nosum;
     for(i=0;i<n;i++){
 	if(die[i])
@@ -310,8 +327,13 @@ void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool Positi
 	    die[i]=true;
 	    continue;
 	}
-	pic->X[i]=Lx[i]/O[i];
-	pic->Y[i]=Ly[i]/O[i];
+	if(PositionFix){
+	}
+	else
+	{
+	    pic->X[i]=Lx[i]/O[i];
+	    pic->Y[i]=Ly[i]/O[i];
+	}
     }
 /*Check stop criterion*/
     double errI=fabs(pic->no-pic0->no),errP=0,Norm_errP=0;
@@ -319,8 +341,12 @@ void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool Positi
 	if(die[i])
 	    continue;
 	errI+=fabs(pic->I[i]-pic0->I[i]);
-	errP+=pic0->I[i]*(fabs(pic->X[i]-pic0->X[i])+fabs(pic->Y[i]-pic0->Y[i]));
-	Norm_errP+=pic0->I[i];
+	if(PositionFix){
+	}
+	else{
+	    errP+=pic0->I[i]*(fabs(pic->X[i]-pic0->X[i])+fabs(pic->Y[i]-pic0->Y[i]));
+	    Norm_errP+=pic0->I[i];
+	}
 	mp=(fabs(run->X[i]-pic->X[i])+fabs(run->Y[i]-pic->Y[i]));
 	if(mp>MZero){
 	    run->X[i]=pic->X[i];
@@ -331,10 +357,15 @@ void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool Positi
 	    freeze[i]=true;
 	}
     }
-    errP=errP/Norm_errP;
+    if(PositionFix){
+    }
+    else{
+	errP=errP/Norm_errP;
+    }
     if(errI<run->Izero&&errP<run->Pzero){
 	run->terminate='Y';
     }
+    free(bb);
     free(Sinv);
     free(O);
     free(Lx);
