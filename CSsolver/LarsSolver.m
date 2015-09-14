@@ -111,7 +111,7 @@ while 1
     X=XNew;
     L=LNew;
     Active=ActiveNew;
-    [XNew,ActiveNew,LNew]=LassoIteration(A,b,c,L,X,Active,Zero);
+    [XNew,ActiveNew,LNew]=LassoIteration(A,b,c,L,X,Active,Zero,0);
     Node.X=XNew;
     Node.L=LNew;
     Node.Active=ActiveNew;
@@ -127,11 +127,17 @@ end
 end
 
 
-function [XNew,ActiveNew,LambdaNew]=LassoIteration(A,b,c,Lambda,X,Active,Zero)
+function [XNew,ActiveNew,LambdaNew]=LassoIteration(A,b,c,Lambda,X,Active,Zero,IfVpa)
 nthis=sum(Active>0);
 Athis=A(:,Active);
 Idxthis=find(Active);
-Inv=(Athis'*Athis)^-1;
+if IfVpa
+    [U,D,V]=svd(vpa(Athis'*Athis,25));
+    Inv=double(U*inv(D)*V');
+else
+    [U,D,V]=svd(Athis'*Athis);
+    Inv=U*inv(D)*V';
+end
 SumInv=Inv*c(Active,1);
 Atb=Athis'*b;
 SinvAtb=Inv*Atb;
