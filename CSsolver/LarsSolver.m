@@ -10,7 +10,7 @@ function [ X, LassoPath ] = LarsSolver( A, b, c, Lambda, Type, X0 )
 %   minimize: 0.5*|(Ax-b)|^2  s.t. x>=0, x_i=0 if c_i~=0
 % If x0 isn't given, it is computed by function quadprog().
 
-Zero=1e-12; % minimal value of A, below which regarded as zero
+Zero=1e-14; % minimal value of A, below which regarded as zero
 Czero=1e-15; % minimal value of c
 Qzero=1e-10; % value to judge active elements in x0
 m=size(A,1);
@@ -137,6 +137,13 @@ Atb=Athis'*b;
 SinvAtb=Inv*Atb;
 Xthis=SinvAtb-SumInv*Lambda;
 %Check which in Active to become inactive.
+IdxMinus=find(Xthis<0);
+if length(IdxMinus)==0
+else
+    DeltaLambda=min(Xthis(IdxMinus,:)./SumInv(IdxMinus,:));
+    Lambda=Lambda+DeltaLambda;
+    Xthis=SinvAtb-SumInv*Lambda;
+end
 LambdaI=-1;
 IdxI=0;
 for i=1:nthis
