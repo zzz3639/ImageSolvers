@@ -53,9 +53,9 @@ end
 L=LNew;
 X=XNew;
 Active=ActiveNew;
-Node.X=X;
+Node.X=sparse(X);
 Node.L=L;
-Node.Active=Active;
+Node.Active=sparse(Active);
 LassoPath=cell(1,1);
 LassoPath{1}=Node;
 
@@ -112,9 +112,9 @@ while 1
     L=LNew;
     Active=ActiveNew;
     [XNew,ActiveNew,LNew]=LassoIteration(A,b,c,L,X,Active,Zero,0);
-    Node.X=XNew;
+    Node.X=sparse(XNew);
     Node.L=LNew;
-    Node.Active=ActiveNew;
+    Node.Active=sparse(ActiveNew);
     LassoPath=[LassoPath;cell(1,1)];
     LassoPath{end}=Node;
     LNew
