@@ -3,7 +3,7 @@ function [ Img ] = SiliconImaging( m, s, pic, no, sigma, obnoise )
 % On silicon imaging of a molecule set.
 % Usage: [ Img ] = SiliconImaging( m, s, pic, no, sigma, obnoise )
 %    m: number of repeats
-%    s=[s1,s2], field of vision
+%    s=[s1,s2], field of vision, start from 0
 %    pic=[X,Y,Intensity], molecule list
 %    no: noise, count by photon number
 %    sigma: PSF width
