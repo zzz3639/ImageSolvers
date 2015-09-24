@@ -136,7 +136,13 @@ if IfVpa
     Inv=double(U*inv(D)*V');
 else
     [U,D,V]=svd(Athis'*Athis);
-    Inv=U*inv(D)*V';
+    if cond(D)==inf || cond(D)>1e12
+        fprintf('\nConvert to high pricision algibra\n');
+        [U,D,V]=svd(vpa(Athis'*Athis,25));
+        Inv=double(U*inv(D)*V');
+    else
+        Inv=U*inv(D)*V';
+    end
 end
 SumInv=Inv*c(Active,1);
 Atb=Athis'*b;
