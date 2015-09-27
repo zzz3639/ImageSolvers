@@ -66,17 +66,21 @@ while 1
         if LNew<Lambda
             Athis=A(:,Active);
             Idxthis=find(Active);
+            Atb=Athis'*b;
+            
             [U,D,V]=svd(Athis'*Athis);
             if cond(D)==inf || cond(D)>1e12
                 fprintf('\nConvert to high pricision algibra\n');
                 [U,D,V]=svd(vpa(Athis'*Athis,vpadigit));
-                Inv=double(U*inv(D)*V');
+                Inv=(U*inv(D)*V');
+                SumInv=double(Inv*c(Active,:));
+                SinvAtb=double(Inv*Atb);
             else
                 Inv=U*inv(D)*V';
+                SumInv=Inv*c(Active,:);
+                SinvAtb=Inv*Atb;
             end
-            SumInv=Inv*c(Active,:);
-            Atb=Athis'*b;
-            SinvAtb=Inv*Atb;
+
             % find solution X
             XthisNew=SinvAtb-SumInv*Lambda;
             XNew=X;
@@ -96,26 +100,30 @@ while 1
             Athis=A(:,Active);
             Xthis=X(Active,:);
             Idxthis=find(Active);
+            Atb=Athis'*b;
+            
             [U,D,V]=svd(Athis'*Athis);
             if cond(D)==inf || cond(D)>1e12
                 fprintf('\nConvert to high pricision algibra\n');
                 [U,D,V]=svd(vpa(Athis'*Athis,vpadigit));
-                Inv=double(U*inv(D)*V');
+                Inv=(U*inv(D)*V');
+                Beta=double(Athis*(Inv*c(Active,:)));
+                SumInv=double(Inv*c(Active,:));
+                SinvAtb=double(Inv*Atb);
             else
                 Inv=U*inv(D)*V';
+                Beta=Athis*Inv*c(Active,:);
+                SumInv=Inv*c(Active,:);
+                SinvAtb=Inv*Atb;
             end
             % calculate DLambda and LambdaFinal
             Alpha=Athis*Xthis-b;
-            Beta=Athis*Inv*c(Active,:);
             Dot=Alpha'*Beta;
             LAlpha=Alpha'*Alpha;
             LBeta=Beta'*Beta;
             DLambda=(-2*Dot-sqrt(max(0,4*Dot*Dot-4*LBeta*(LAlpha-Lambda*Lambda)))) /(2*LBeta);
             Lfinal=L-DLambda;
             % find the solution X
-            SumInv=Inv*c(Active,:);
-            Atb=Athis'*b;
-            SinvAtb=Inv*Atb;
             XthisNew=SinvAtb-SumInv*Lfinal;
             XNew=X;
             XNew(Idxthis)=XthisNew;
@@ -146,6 +154,7 @@ function [XNew,ActiveNew,LambdaNew]=LassoIteration(A,b,c,Lambda,X,Active,Zero,If
 nthis=sum(Active>0);
 Athis=A(:,Active);
 Idxthis=find(Active);
+Atb=Athis'*b;
 if IfVpa
     [U,D,V]=svd(vpa(Athis'*Athis,vpadigit));
     Inv=double(U*inv(D)*V');
@@ -154,14 +163,15 @@ else
     if cond(D)==inf || cond(D)>1e12
         fprintf('\nConvert to high pricision algibra,vpadigit=%d\n',vpadigit);
         [U,D,V]=svd(vpa(Athis'*Athis,vpadigit));
-        Inv=double(U*inv(D)*V');
+        Inv=(U*inv(D)*V');
+        SumInv=double(Inv*c(Active,1));
+        SinvAtb=double(Inv*Atb);
     else
         Inv=U*inv(D)*V';
+        SumInv=Inv*c(Active,1);
+        SinvAtb=Inv*Atb;
     end
 end
-SumInv=Inv*c(Active,1);
-Atb=Athis'*b;
-SinvAtb=Inv*Atb;
 Xthis=SinvAtb-SumInv*Lambda;
 %Check which in Active to become inactive.
 IdxMinus=find(Xthis<0);

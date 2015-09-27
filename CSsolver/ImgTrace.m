@@ -2,6 +2,7 @@ function [ Xans ] = ImgTrace( A, b, c, Lambda, Type, LassoPath )
 %IMGTRACE Summary of this function goes here
 %   X=ImgTrace( A, b, c, Lambda, Type, LassoPath );
 
+vpadigit=50;
 L=zeros(length(LassoPath),1);
 
 for i=1:length(LassoPath)
@@ -25,17 +26,19 @@ if Type==0
     % calculate answer
     Athis=A(:,Active);
     Idxthis=find(Active);
+    Atb=Athis'*b;
     [U,D,V]=svd(Athis'*Athis);
     if cond(D)==inf || cond(D)>1e12
         fprintf('\nConvert to high pricision algibra\n');
-        [U,D,V]=svd(vpa(Athis'*Athis,25));
-        Inv=double(U*inv(D)*V');
+        [U,D,V]=svd(vpa(Athis'*Athis,vpadigit));
+        Inv=(U*inv(D)*V');
+        SumInv=double(Inv*c(Active,:));
+        SinvAtb=double(Inv*Atb);
     else
         Inv=U*inv(D)*V';
+        SumInv=Inv*c(Active,:);
+        SinvAtb=Inv*Atb;
     end
-    SumInv=Inv*c(Active,:);
-    Atb=Athis'*b;
-    SinvAtb=Inv*Atb;
     % find solution X
     XthisNew=SinvAtb-SumInv*Lambda;
     XNew=X;
@@ -66,26 +69,29 @@ else
     Athis=A(:,Active);
     Xthis=X(Active,:);
     Idxthis=find(Active);
+    Atb=Athis'*b;
     [U,D,V]=svd(Athis'*Athis);
     if cond(D)==inf || cond(D)>1e12
         fprintf('\nConvert to high pricision algibra\n');
-        [U,D,V]=svd(vpa(Athis'*Athis,25));
-        Inv=double(U*inv(D)*V');
+        [U,D,V]=svd(vpa(Athis'*Athis,vpadigit));
+        Inv=(U*inv(D)*V');
+        Beta=double(Athis*Inv*c(Active,:));
+        SumInv=double(Inv*c(Active,:));
+        SinvAtb=double(Inv*Atb);
     else
         Inv=U*inv(D)*V';
+        Beta=Athis*Inv*c(Active,:);
+        SumInv=Inv*c(Active,:);
+        SinvAtb=Inv*Atb;
     end
     % calculate DLambda and LambdaFinal
     Alpha=Athis*Xthis-b;
-    Beta=Athis*Inv*c(Active,:);
     Dot=Alpha'*Beta;
     LAlpha=Alpha'*Alpha;
     LBeta=Beta'*Beta;
     DLambda=(-2*Dot-sqrt(max(0,4*Dot*Dot-4*LBeta*(LAlpha-Lambda*Lambda)))) /(2*LBeta);
     Lfinal=L-DLambda;
     % find the solution X
-    SumInv=Inv*c(Active,:);
-    Atb=Athis'*b;
-    SinvAtb=Inv*Atb;
     XthisNew=SinvAtb-SumInv*Lfinal;
     XNew=X;
     XNew(Idxthis)=XthisNew;
