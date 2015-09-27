@@ -1,4 +1,4 @@
-function [ X, LassoPath ] = LarsSolver( A, b, c, Lambda, Type, X0 )
+function [ X, LassoPath ] = LarsSolver( A, b, c, Lambda, Type, X0, NoPrintPath )
 %Solves this Problem by Least angle regression: 
 %    Type=0: 0.5*|(Ax-b)|^2+Lambda*c'*x  s.t. x>=0
 %    Type=1: c'*x  s.t. |(Ax-b)|^2 <= Lambda^2, && x>=0
@@ -140,7 +140,10 @@ while 1
     Node.Active=sparse(ActiveNew);
     LassoPath=[LassoPath;cell(1,1)];
     LassoPath{end}=Node;
-    LNew
+    if exist('NoPrintPath')
+    else
+        LNew
+    end
 
 end
 
