@@ -18,6 +18,7 @@ n=size(A,2);
 ActiveNew=zeros(n,1);
 ActiveNew=ActiveNew>0.5;
 XNew=zeros(n,1);
+vpadigit=50
 
 %%% Initialize
 Atb=A'*b;
@@ -65,7 +66,14 @@ while 1
         if LNew<Lambda
             Athis=A(:,Active);
             Idxthis=find(Active);
-            Inv=(Athis'*Athis)^-1;
+            [U,D,V]=svd(Athis'*Athis);
+            if cond(D)==inf || cond(D)>1e12
+                fprintf('\nConvert to high pricision algibra\n');
+                [U,D,V]=svd(vpa(Athis'*Athis,vpadigit));
+                Inv=double(U*inv(D)*V');
+            else
+                Inv=U*inv(D)*V';
+            end
             SumInv=Inv*c(Active,:);
             Atb=Athis'*b;
             SinvAtb=Inv*Atb;
@@ -88,7 +96,14 @@ while 1
             Athis=A(:,Active);
             Xthis=X(Active,:);
             Idxthis=find(Active);
-            Inv=(Athis'*Athis)^-1;
+            [U,D,V]=svd(Athis'*Athis);
+            if cond(D)==inf || cond(D)>1e12
+                fprintf('\nConvert to high pricision algibra\n');
+                [U,D,V]=svd(vpa(Athis'*Athis,vpadigit));
+                Inv=double(U*inv(D)*V');
+            else
+                Inv=U*inv(D)*V';
+            end
             % calculate DLambda and LambdaFinal
             Alpha=Athis*Xthis-b;
             Beta=Athis*Inv*c(Active,:);
@@ -111,7 +126,7 @@ while 1
     X=XNew;
     L=LNew;
     Active=ActiveNew;
-    [XNew,ActiveNew,LNew]=LassoIteration(A,b,c,L,X,Active,Zero,0);
+    [XNew,ActiveNew,LNew]=LassoIteration(A,b,c,L,X,Active,Zero,0,vpadigit);
     Node.X=sparse(XNew);
     Node.L=LNew;
     Node.Active=sparse(ActiveNew);
@@ -127,18 +142,18 @@ end
 end
 
 
-function [XNew,ActiveNew,LambdaNew]=LassoIteration(A,b,c,Lambda,X,Active,Zero,IfVpa)
+function [XNew,ActiveNew,LambdaNew]=LassoIteration(A,b,c,Lambda,X,Active,Zero,IfVpa,vpadigit)
 nthis=sum(Active>0);
 Athis=A(:,Active);
 Idxthis=find(Active);
 if IfVpa
-    [U,D,V]=svd(vpa(Athis'*Athis,25));
+    [U,D,V]=svd(vpa(Athis'*Athis,vpadigit));
     Inv=double(U*inv(D)*V');
 else
     [U,D,V]=svd(Athis'*Athis);
     if cond(D)==inf || cond(D)>1e12
-        fprintf('\nConvert to high pricision algibra\n');
-        [U,D,V]=svd(vpa(Athis'*Athis,25));
+        fprintf('\nConvert to high pricision algibra,vpadigit=%d\n',vpadigit);
+        [U,D,V]=svd(vpa(Athis'*Athis,vpadigit));
         Inv=double(U*inv(D)*V');
     else
         Inv=U*inv(D)*V';
