@@ -10,7 +10,7 @@ function [ X, LassoPath ] = LarsSolver( A, b, c, Lambda, Type, X0, NoPrintPath )
 %   minimize: 0.5*|(Ax-b)|^2  s.t. x>=0, x_i=0 if c_i~=0
 % If x0 isn't given, it is computed by function quadprog().
 
-Zero=1e-14; % minimal value of A, below which regarded as zero
+Zero=0; % minimal value of A, below which regarded as zero
 Czero=1e-15; % minimal value of c
 Qzero=1e-10; % value to judge active elements in x0
 m=size(A,1);
@@ -36,7 +36,7 @@ if length(Idxthis)>0
         X0=zeros(size(XNew));
         X0(Idxthis,:)=Xtemp;
     end
-    ActiveNew(X0>=Zero,:)=1;
+    ActiveNew(X0>=Qzero,:)=1;
     XNew(X0>=Qzero,:)=X0(X0>=Qzero,:);
     AtAX=A'*(Athis*XNew(Idxthis,:));
     ValueLambda=(Atb(~Active,:)-AtAX(~Active,:))./c(~Active,:);
@@ -135,6 +135,10 @@ while 1
     L=LNew;
     Active=ActiveNew;
     [XNew,ActiveNew,LNew]=LassoIteration(A,b,c,L,X,Active,Zero,0,vpadigit);
+    if LNew>L
+        fprintf('\nTerminate before stop condition met\n');
+        return;
+    end
     Node.X=sparse(XNew);
     Node.L=LNew;
     Node.Active=sparse(ActiveNew);
@@ -160,7 +164,9 @@ Idxthis=find(Active);
 Atb=Athis'*b;
 if IfVpa
     [U,D,V]=svd(vpa(Athis'*Athis,vpadigit));
-    Inv=double(U*inv(D)*V');
+    Inv=(U*inv(D)*V');
+    SumInv=double(Inv*c(Active,1));
+    SinvAtb=double(Inv*Atb);
 else
     [U,D,V]=svd(Athis'*Athis);
     if cond(D)==inf || cond(D)>1e12
@@ -208,10 +214,16 @@ for i=1:size(A,2)
     Ajshort=[A(Idxjshort,i)]';
     AjtA=Ajshort*Athis(Idxjshort,:);
     D=AjtA*SumInv-c(i);
+    N=AjtA*Xthis-[A(:,i)]'*b+c(i)*Lambda;
     if D>=0
         continue;
     end
-    N=AjtA*Xthis-[A(:,i)]'*b+c(i)*Lambda;
+    if N/D>0
+        LambdaNew=Lambda+1;
+        XNew=X;
+        ActiveNew=Active;
+        return;
+    end
     Lambdathis=Lambda+N/D;
     if Lambdathis>LambdaA
         LambdaA=Lambdathis;
@@ -227,12 +239,47 @@ if LambdaI>LambdaA
     else
         LambdaNew=0;
     end
-    XthisNew=SinvAtb-SumInv*LambdaNew;
     XNew=X;
-    XNew(Idxthis)=XthisNew;
     if IdxI~=0
         ActiveNew(IdxI)=0;
         XNew(IdxI)=0;
+        % calibrate lambda
+        AthisNew=A(:,ActiveNew);
+        IdxthisNew=find(ActiveNew);
+        AtbNew=AthisNew'*b;
+        if IfVpa
+            [U,D,V]=svd(vpa(AthisNew'*AthisNew,vpadigit));
+            InvNew=(U*inv(D)*V');
+            SumInvNew=double(InvNew*c(ActiveNew,1));
+            SinvAtbNew=double(InvNew*AtbNew);
+        else
+            [U,D,V]=svd(AthisNew'*AthisNew);
+            if cond(D)==inf || cond(D)>1e12
+                fprintf('\nConvert to high pricision algibra,vpadigit=%d\n',vpadigit);
+                [U,D,V]=svd(vpa(AthisNew'*AthisNew,vpadigit));
+                InvNew=(U*inv(D)*V');
+                SumInvNew=double(InvNew*c(ActiveNew,1));
+                SinvAtbNew=double(InvNew*AtbNew);
+            else
+                InvNew=U*inv(D)*V';
+                SumInvNew=InvNew*c(ActiveNew,1);
+                SinvAtbNew=InvNew*AtbNew;
+            end
+        end
+        XthisNew=SinvAtbNew-SumInvNew*LambdaNew;
+        IdxjshortNew=find(A(:,IdxI)>Zero);
+        AjshortNew=[A(IdxjshortNew,IdxI)]';
+        AjtANew=AjshortNew*AthisNew(IdxjshortNew,:);
+        D=AjtANew*SumInvNew-c(IdxI);
+        N=AjtANew*XthisNew-[A(:,IdxI)]'*b+c(IdxI)*LambdaNew;
+        if N<0
+            LambdaNew=(AjtANew*SinvAtbNew-[A(:,IdxI)]'*b)/D;
+        end
+        XthisNew=SinvAtbNew-SumInvNew*LambdaNew;
+        XNew(IdxthisNew)=XthisNew;
+    else
+        XthisNew=SinvAtb-SumInv*LambdaNew;
+        XNew(Idxthis)=XthisNew;
     end
 
 else
