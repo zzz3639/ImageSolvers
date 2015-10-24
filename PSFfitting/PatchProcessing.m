@@ -19,6 +19,7 @@ while c==0
     save([SavePath,'/',fname(1:end-4),'Peak.mat'],'PeakList');
     save([SavePath,'/',fname(1:end-4),'XYIT.mat'],'XYITlist');
     save([SavePath,'/',fname(1:end-4),'Gold.mat'],'Goldset');
+    save([SavePath,'/',fname(1:end-4),'Sigma.mat'],'Sigma');
     L=length(Goldset);
     Perm=randperm(L);
     k=1;

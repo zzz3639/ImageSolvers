@@ -5,6 +5,7 @@ N=size(Sery,3);
 MaxIteNode=2000;
 Izero=1e-5;
 Pzero=1e-4;
+MaxIteIni=500;
 MaxIte0=5000;
 Izero0=1e-6;
 Pzero0=1e-5;
@@ -31,7 +32,7 @@ OptL=OptL./Norm;
 for t=1:N
     Img=Sery(:,:,t);
     L=OptL(ceil(t/Skip));
-    [pic,no]=RunSolver( Img, floor(size(Img,1)*size(Img,2)/7/7/sig/sig*20), sig, [MaxIte0,Izero0*sum(sum(Img)),Pzero0], [4,5], L, int64(10000) );
+    [pic,no]=FastSolver( Img, floor(size(Img,1)*size(Img,2)/7/7/sig/sig*20), L, [sig,4,5], [MaxIteIni,MaxIte0,Izero0*sum(sum(Img)),Pzero0], [0.1,0.5] );
     pic=PostRun(pic,[0.1,0.5,0.95]);
     Pic{t}=pic;
 end

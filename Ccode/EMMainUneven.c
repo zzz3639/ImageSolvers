@@ -1,5 +1,6 @@
 /* Modified in 2015.07.10 by ZHANG Haowen
    Do SparseGMM fitting by EM algorithm
+   Background noise is modeled by special particles, psf equals to first order B-spline bases.
 */
 #include"mex.h"
 #include"EMfunctions.h"
@@ -13,11 +14,18 @@
     #define PosFix false
 #endif
 
+#ifndef EveNoise
+    #define EveNoise false
+#endif
+
 struct InType{
     int s1;
     int s2;
+    int g1;
+    int g2;
     double *b;
     int n;
+    int NumNo;
     double sig;
     int MaxIt;
     double Pzero;
@@ -35,11 +43,11 @@ struct MV{
     double **X;
     double **Y;
     double **I;
-    double *no;
+    double **No;
 };
 
 
-void ReadInput(int nrhs ,const mxArray *prhs[], struct InType *input, struct CPtable *CP)
+void ReadInput(int nrhs ,const mxArray *prhs[], struct InType *input)
 {
     int k;
 /*reading b;*/
@@ -69,46 +77,23 @@ void ReadInput(int nrhs ,const mxArray *prhs[], struct InType *input, struct CPt
     input->bsize=(int)(*(mxGetPr(prhs[4]))+0.5);
 /*reading PSF range;*/
     input->psfdecay=(int)(*(mxGetPr(prhs[5]))+0.5);
+/*reading noise grid parameter g1,g2*/
+    input->g1=(int)(*(mxGetPr(prhs[6]))+0.5);
+    input->g2=(int)(*(mxGetPr(prhs[6])+1)+0.5);
 /*reading lambda;*/
-    input->lambda=*(mxGetPr(prhs[6]));
+    input->lambda=*(mxGetPr(prhs[7]));
 /*reading interval length*/
-    t=mxGetPr(prhs[7]);
+    t=mxGetPr(prhs[8]);
     input->interval=*((long int *)t);
     input->seed=-1;
-    if(mxGetN(prhs[7])>1)
+    if(mxGetN(prhs[8])>1)
 	input->seed=*((long int *)t+1);
-/*Reading CPtable*/
-    int NumLambda,NumMu;
-    mxArray *pv1,*pv2;
-    pv1=mxGetField(prhs[nrhs-1],0,"C");
-    t=mxGetPr(pv1);
-    CP->C=(*t);
-    pv1=mxGetField(prhs[nrhs-1],0,"MuX");
-    i=mxGetM(pv1);
-    j=mxGetN(pv1);
-    NumMu=i*j;
-    pv2=mxGetField(prhs[nrhs-1],0,"LambdaX");
-    i=mxGetM(pv2);
-    j=mxGetN(pv2);
-    NumLambda=i*j;
-    CPtable_malloc(CP,NumLambda,NumMu);
-    t=mxGetPr(pv1);
-    for(i=0;i<NumMu;i++)
-        CP->MuX[i]=*(t+i);
-    t=mxGetPr(pv2);
-    for(i=0;i<NumLambda;i++)
-        CP->LambdaX[i]=*(t+i);
-    
-    pv1=mxGetField(prhs[nrhs-1],0,"CPtable");
-    t=mxGetPr(pv1);
-    for(i=0;i<NumLambda;i++)
-        for(j=0;j<NumMu;j++)
-	    CP->cptable[i][j]=*(t+j*NumLambda+i);
-
+    if(nrhs>9){
+    }
     return;
 }
 
-void WriteOutput(int nlhs, mxArray *plhs[], int n, struct State *pic, struct MV *mv, long int seed, int bsize)
+void WriteOutput(int nlhs, mxArray *plhs[], int n, int NumNo, struct State *pic, struct MV *mv, long int seed, int bsize)
 {
     if(nlhs<1)
         return;
@@ -124,9 +109,11 @@ void WriteOutput(int nlhs, mxArray *plhs[], int n, struct State *pic, struct MV 
     }
     if(nlhs<2)
 	return;
-    plhs[1]=mxCreateNumericMatrix(1,1,mxDOUBLE_CLASS,mxREAL);
+    plhs[1]=mxCreateNumericMatrix(NumNo,1,mxDOUBLE_CLASS,mxREAL);
     point=mxGetPr(plhs[1]);
-    *(point)=pic->no;
+    for(i=0;i<NumNo;i++){
+        *(point+i)=pic->No[i];
+    }
 
     if(nlhs<3)
         return;
@@ -147,10 +134,12 @@ void WriteOutput(int nlhs, mxArray *plhs[], int n, struct State *pic, struct MV 
     mxSetField(plhs[2],0,"N",pv);
 
     mxAddField(plhs[2],"no");
-    pv=mxCreateNumericMatrix(mv->P,1,mxDOUBLE_CLASS,mxREAL);
+    pv=mxCreateNumericMatrix(mv->P,NumNo,mxDOUBLE_CLASS,mxREAL);
     point=mxGetPr(pv);
     for(i=0;i<mv->P;i++)
-        *(point+i)=mv->no[i];
+	for(j=0;j<NumNo;j++){
+	    *(point+i+j*mv->P)=mv->No[i][j];
+	}
     mxSetField(plhs[2],0,"no",pv);
 
     mxAddField(plhs[2],"pic");
@@ -174,22 +163,21 @@ void WriteOutput(int nlhs, mxArray *plhs[], int n, struct State *pic, struct MV 
 
 }
 
-void PrintInput(struct InType *input, struct CPtable *CP)
+void PrintInput(struct InType *input)
 {
     mexPrintf("\nInput data and parameters:\n");
     mexPrintf("Picture parameters: s=%d*%d\n",input->s1,input->s2);
+    mexPrintf("Background noise grid size: g=%d*%d, Noise Particle number: %d\n",input->g1,input->g2, input->NumNo);
     mexPrintf("Optimization parameters: n=%d, sigma=%f, boundary size=%d, PSF range=%d, lambda=%f\n", input->n,input->sig,input->bsize,input->psfdecay,input->lambda);
-    mexPrintf("CPtable: c=%f\n",CP->C);
     mexPrintf("Stop criterion: Max iteration number=%d, Intensity stop criterion=%e, Position stop criterion=%e\n",input->MaxIt,input->Izero,input->Pzero);
     mexPrintf("Save every %ld iterations\n",input->interval);
     mexPrintf("Random Seed=%ld\n\n",input->seed);
     return;
 }
 
-void Initialize(struct InType *input, struct RUN *R, struct CPtable *CP)
+void Initialize(struct InType *input, struct RUN *R)
 {
-    mexPrintf("\nInitializing\n");
-    CPtable_prepare(CP);
+    mexPrintf("\nStart to initialize\n");
     R->n=input->n;
     R->lambda=input->lambda;
     R->sig=input->sig;
@@ -246,8 +234,8 @@ void Initialize(struct InType *input, struct RUN *R, struct CPtable *CP)
 	R->expx[i]=-dx*i;
 	R->exptable[i]=exp(-dx*i);
     }
-    mexPrintf("\nInitialize finished\n");
 
+    /*Allocate space to record frozen particles*/
     R->X=(double *)malloc(sizeof(double)*input->n);
     R->Y=(double *)malloc(sizeof(double)*input->n);
     R->die=(bool *)malloc(sizeof(bool)*input->n);
@@ -258,30 +246,97 @@ void Initialize(struct InType *input, struct RUN *R, struct CPtable *CP)
 	R->die[i]=false;
 	R->freeze[i]=false;
     }
+
+    /*Initialize noise particles*/
+    int gs1,gs2;
+    gs1=(input->g1/2)+R->bsize;
+    gs2=(input->g2/2)+R->bsize;
+    int numg1,numg2;
+    numg1=(R->s1-1-input->g1/2)/input->g1+1;
+    numg2=(R->s2-1-input->g2/2)/input->g2+1;
+
+    int *gidx1,*gidx2;
+    gidx1=(int *)malloc(sizeof(int)*(numg1+2));
+    gidx2=(int *)malloc(sizeof(int)*(numg2+2));
+    gidx1[0]=-1;
+    for(i=1;i<numg1+1;i++)
+	gidx1[i]=gs1+(i-1)*input->g1;
+    gidx1[numg1+1]=2*R->bsize+R->s1;
+    gidx2[0]=-1;
+    for(i=1;i<numg2+1;i++)
+	gidx2[i]=gs2+(i-1)*input->g2;
+    gidx2[numg2+1]=2*R->bsize+R->s2;
+
+    R->NumNo=numg1*numg2;
+    R->NoDist=(struct Sparse *)malloc(sizeof(struct Sparse)*R->NumNo);
+    R->NoAssign=(struct Sparse *)malloc(sizeof(struct Sparse)*R->NumNo);
+    int LengthPsfnoThis;
+    int ig,jg;
+    int idxno;
+    double mg1,mg2;
+    double SumPsfnoThis;
+    for(i=0;i<numg1;i++){
+	for(j=0;j<numg2;j++){
+	    idxno=i+j*numg1;
+	    LengthPsfnoThis=(gidx1[i+2]-gidx1[i]-1)*(gidx2[j+2]-gidx2[j]-1);
+	    Sparse_malloc(R->NoDist+idxno,LengthPsfnoThis);
+	    Sparse_malloc(R->NoAssign+idxno,LengthPsfnoThis);
+	    k=0;
+	    SumPsfnoThis;
+	    for(ig=gidx1[i]+1;ig<gidx1[i+2];ig++){
+		for(jg=gidx2[j]+1;jg<gidx2[j+2];jg++){
+                    R->NoDist[idxno].X[k]=ig;
+                    R->NoDist[idxno].Y[k]=jg;
+                    R->NoAssign[idxno].X[k]=ig;
+                    R->NoAssign[idxno].Y[k]=jg;
+		    if(i==0&&ig<gidx1[i+1])
+			mg1=1.0;
+		    else if(i==numg1-1&&ig>gidx1[i+1])
+			mg1=1.0;
+		    else
+			mg1=1.0-1.0*abs(ig-gidx1[i+1])/input->g1;
+		    if(j==0&&jg<gidx2[j+1])
+			mg2=1.0;
+		    else if(j==numg2-1&&jg>gidx2[j+1])
+			mg2=1.0;
+		    else
+			mg2=1.0-1.0*abs(jg-gidx2[j+1])/input->g2;
+		    SumPsfnoThis+=mg1*mg2;
+		    R->NoDist[idxno].V[k]=mg1*mg2;
+		    k+=1;
+		}
+	    }
+	    for(k=0;k<R->NoDist[idxno].n;k++){
+		R->NoDist[idxno].V[k]=R->NoDist[idxno].V[k]/SumPsfnoThis;
+	    }
+	}
+    }
+
+    mexPrintf("\nInitialize finished\n");
     return;
 }
 
 
-void FreeMem(struct RUN *run, struct InType *input, struct MV *mv, struct State *pic, struct State *pic0, struct CPtable *CP)
+void FreeMem(struct RUN *run, struct InType *input, struct MV *mv, struct State *pic, struct State *pic0)
 {
 /*free mv and pic, pic0;*/
-    State_free(pic0,true);
-    State_free(pic,true);
+    State_free(pic0,EveNoise);
+    State_free(pic,EveNoise);
     int i;
     for(i=0;i<mv->P;i++){
 	free(mv->X[i]);
 	free(mv->Y[i]);
 	free(mv->I[i]);
+	free(mv->No[i]);
     }
     free(mv->X);
     free(mv->Y);
     free(mv->I);
-    free(mv->no);
+    free(mv->No);
 /*free input*/
     free(input->b);
 /*free run*/
-    RUN_free(run,true);
-    CPtable_free(CP);
+    RUN_free(run,EveNoise);
 
     return;
 }
@@ -289,15 +344,13 @@ void FreeMem(struct RUN *run, struct InType *input, struct MV *mv, struct State 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
     if(nrhs!=9&&nrhs!=10){
-        mexErrMsgTxt("\nparameter number incorrect!\nUsage:\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,Lambda,[int64(NIte)],CPtable)\nOr\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,Lambda,[NIte,Seed],CPtable)\nOr\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,Lambda,[int64(NIte)],MV0,CPtable)\n");
+        mexErrMsgTxt("\nparameter number incorrect!\nUsage:\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,[g1,g2],Lambda,[int64(NIte)])\nOr\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,[g1,g2],Lambda,[NIte,Seed])\nOr\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,[g1,g2],Lambda,[int64(NIte)],MV0)\n");
         return;
     }
-    mexPrintf("\nRunning Robust SparseGMM\n");
     struct InType input;
-    struct CPtable CP;
-    ReadInput(nrhs,prhs,&input,&CP);
+    ReadInput(nrhs,prhs,&input);
     struct RUN run;
-    Initialize(&input,&run,&CP);
+    Initialize(&input,&run);
 
 /*Initialize mv*/
     struct MV mv;
@@ -305,12 +358,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     mv.X =(double **)malloc(sizeof(double *)*Smax);
     mv.Y =(double **)malloc(sizeof(double *)*Smax);
     mv.I =(double **)malloc(sizeof(double *)*Smax);
-    mv.no=(double *)malloc(sizeof(double)*Smax);
+    mv.No=(double **)malloc(sizeof(double *)*Smax);
 
 /*allocate pic0, pic*/
     struct State pic0,pic;
-    State_malloc(&pic, input.n, 0, true);
-    State_malloc(&pic0,input.n, 0, true);
+    State_malloc(&pic, input.n, run.NumNo, EveNoise);
+    State_malloc(&pic0,input.n, run.NumNo, EveNoise);
 
     int i,j,k,t;
 /*Initialize pic*/
@@ -323,21 +376,31 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	    }
 	    else
 		srand(input.seed);
-	    double x=1.0/(input.n+1);
-	    pic.no=x;
+	    double IntImgTotal=0;
+	    for(i=0;i<input.s1*input.s2;i++){
+		IntImgTotal+=input.b[i];
+	    }
+	    IntImgTotal=IntImgTotal*run.sbs/run.ss;
+	    double X1=IntImgTotal*0.5/(input.n);
+	    double X2=IntImgTotal*0.5/(run.NumNo);
+	    for(i=0;i<input.NumNo;i++){
+		pic.No[i]=X2;
+	    }
 	    for(i=0;i<input.n;i++){
 		pic.X[i]=1.0*rand()/RAND_MAX*(input.s1-1)+input.bsize;
 		pic.Y[i]=1.0*rand()/RAND_MAX*(input.s2-1)+input.bsize;
-		pic.I[i]=x;
+		pic.I[i]=X1;
 	    }
 	}
 	else{
 	    mxArray *pv;
 	    double *mvint;
-	    pv=mxGetField(prhs[8],0,"no");
+	    pv=mxGetField(prhs[9],0,"no");
 	    mvint=mxGetPr(pv);
-	    pic.no=*mvint;
-	    pv=mxGetField(prhs[8],0,"pic");
+	    for(i=0;i<input.NumNo;i++){
+		pic.No[i]=*(mvint+i);
+	    }
+	    pv=mxGetField(prhs[9],0,"pic");
 	    mvint=mxGetPr(pv);
 	    for(i=0;i<input.n;i++){
 		pic.Y[i]=*(mvint+i)+input.bsize;
@@ -346,7 +409,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	    }
 	}
     }
-    PrintInput(&input,&CP);
+    input.NumNo=run.NumNo;
+    PrintInput(&input);
 
 /*Run EM*/
     mv.P=0;
@@ -357,16 +421,19 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	    mv.X[mv.P]=(double *)malloc(sizeof(double)*input.n);
 	    mv.Y[mv.P]=(double *)malloc(sizeof(double)*input.n);
 	    mv.I[mv.P]=(double *)malloc(sizeof(double)*input.n);
-	    mv.no[mv.P]=pic.no;
+	    mv.No[mv.P]=(double *)malloc(sizeof(double)*input.NumNo);
 	    for(i=0;i<input.n;i++){
 		mv.X[mv.P][i]=pic.X[i];
 		mv.Y[mv.P][i]=pic.Y[i];
 		mv.I[mv.P][i]=pic.I[i];
 	    }
+	    for(i=0;i<input.NumNo;i++){
+		mv.No[mv.P][i]=pic.No[i];
+	    }
 	    mv.P++;
 	}
     /*Run EM*/
-	RunStep(&run,&pic,&pic0,PosFix,true,&CP, true);
+	RunStep(&run,&pic,&pic0,PosFix,false,NULL,EveNoise);
     /*Judge break or not*/
         if(run.terminate=='Y')
 	    break;
@@ -376,8 +443,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     else
 	mexPrintf("\nFinished, converge after %d iterations\n\n",t);
     mv.T=t;
-    WriteOutput(nlhs,plhs,input.n,&pic,&mv,input.seed,input.bsize);
-    FreeMem(&run,&input,&mv,&pic,&pic0,&CP);
+    WriteOutput(nlhs,plhs,input.n,input.NumNo,&pic,&mv,input.seed,input.bsize);
+    FreeMem(&run,&input,&mv,&pic,&pic0);
 
     return;
 }

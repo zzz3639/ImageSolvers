@@ -17,24 +17,31 @@ void Sparse_free(struct Sparse *Sp)
     return;
 }
 
-void State_malloc(struct State *St, int n)
+void State_malloc(struct State *St, int n, int NumNo, bool EvenNoise)
 {
     St->n=n;
     St->X=(double *)malloc(sizeof(double)*n);
     St->Y=(double *)malloc(sizeof(double)*n);
     St->I=(double *)malloc(sizeof(double)*n);
+    if(!EvenNoise){
+	St->NumNo=NumNo;
+	St->No=(double *)malloc(sizeof(double)*NumNo);
+    }
     return;
 }
 
-void State_free(struct State *St)
+void State_free(struct State *St, bool EvenNoise)
 {
     free(St->X);
     free(St->Y);
     free(St->I);
+    if(!EvenNoise){
+	free(St->No);
+    }
     return;
 }
 
-void RUN_free(struct RUN *run)
+void RUN_free(struct RUN *run, bool EvenNoise)
 {
     int i;
     free(run->bb);
@@ -57,6 +64,18 @@ void RUN_free(struct RUN *run)
     }
     free(run->W);
     free(run->w);
+    if(!EvenNoise){
+	for(i=0;i<run->NumNo;i++){
+	    free(run->NoDist[i].X);
+	    free(run->NoDist[i].Y);
+	    free(run->NoDist[i].V);
+	    free(run->NoAssign[i].X);
+	    free(run->NoAssign[i].Y);
+	    free(run->NoAssign[i].V);
+	}
+	free(run->NoDist);
+	free(run->NoAssign);
+    }
     return;
 }
 
@@ -197,9 +216,42 @@ void PSFno(double *An, int sbs, double no)
     return;
 }
 
+/*Compute noise PSF for uneven noise distribution*/
+/*NoDist are the noise particles, No are the intensities of noise particles*/
+/*An, NoAssign are pre-allocated*/
+void UnevenPSFno(double *An, struct Sparse *NoAssign, int sbs, int sb1, int sb2, int NumNo, struct Sparse *NoDist, double *No)
+{
+    int i,j;
+    int idx;
+    for(i=0;i<sbs;i++)
+        An[i]=0;
+    for(i=0;i<NumNo;i++){
+	NoAssign[i].n=NoDist[i].n;
+	for(j=0;j<NoDist[i].n;j++){
+	    idx=NoDist[i].X[j]+NoDist[i].Y[j]*sb1;
+	    NoAssign[i].X[j]=NoDist[i].X[j];
+	    NoAssign[i].Y[j]=NoDist[i].Y[j];
+	    NoAssign[i].V[j]=NoDist[i].V[j]*No[i];
+	    An[idx]+=NoAssign[i].V[j];
+	}
+    }
+    double *Aninv;
+    Aninv=(double *)malloc(sizeof(double)*sbs);
+    for(i=0;i<sbs;i++)
+	Aninv[i]=1.0/An[i];
+    for(i=0;i<NumNo;i++){
+	for(j=0;j<NoDist[i].n;j++){
+	    idx=NoDist[i].X[j]+NoDist[i].Y[j]*sb1;
+	    NoAssign[i].V[j]=NoAssign[i].V[j]*Aninv[idx];
+	}
+    }
+    free(Aninv);
+    return;
+}
+
 /*Run one EM iteration.*/ 
 /*If PositionFix==true, then Molecule positions will not upgrade*/
-void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool PositionFix, bool DoCalibration, struct CPtable *CP)
+void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool PositionFix, bool DoCalibration, struct CPtable *CP, bool EvenNoise)
 {
     int i,j;
     int n=run->n;
@@ -261,7 +313,12 @@ void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool Positi
 	    }
 	}
     }
-    PSFno(Wn,sbs,pic->no);
+    if(EvenNoise){
+        PSFno(Wn,sbs,pic->no);
+    }
+    else{
+	UnevenPSFno(Wn,run->NoAssign,sbs,sb1,sb2,pic->NumNo,run->NoDist,pic->No);
+    }
     /*reconstruct the hidden part of the picture*/
     double *Sinv;
     Sinv=(double *)malloc(sizeof(double)*sbs);
@@ -313,7 +370,20 @@ void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool Positi
 /*Mstep*/
     /*update intensity(np,nosum, O[n])*/
     double Iinv=1.0/(1.0+run->lambda);
-    pic->no=nosum;
+    if(EvenNoise){
+        pic->no=nosum;
+    }
+    else{
+	for(i=0;i<run->NumNo;i++){
+	    pic->No[i]=0;
+	}
+        for(i=0;i<run->NumNo;i++){
+	    for(j=0;j<run->NoAssign[i].n;j++){
+		ind=run->NoAssign[i].X[j]+run->NoAssign[i].Y[j]*sb1;
+		pic->No[i]+=Wn[ind]*run->NoAssign[i].V[j];
+	    }
+	}
+    }
     for(i=0;i<n;i++){
 	if(die[i])
 	    continue;

@@ -237,8 +237,8 @@ void Initialize(struct InType *input, struct RUN *R)
 void FreeMem(struct RUN *run, struct InType *input, struct MV *mv, struct State *pic, struct State *pic0)
 {
 /*free mv and pic, pic0;*/
-    State_free(pic0);
-    State_free(pic);
+    State_free(pic0,true);
+    State_free(pic,true);
     int i;
     for(i=0;i<mv->P;i++){
 	free(mv->X[i]);
@@ -252,7 +252,7 @@ void FreeMem(struct RUN *run, struct InType *input, struct MV *mv, struct State 
 /*free input*/
     free(input->b);
 /*free run*/
-    RUN_free(run);
+    RUN_free(run,true);
 
     return;
 }
@@ -278,8 +278,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
 /*allocate pic0, pic*/
     struct State pic0,pic;
-    State_malloc(&pic, input.n);
-    State_malloc(&pic0,input.n);
+    State_malloc(&pic, input.n, 0, true);
+    State_malloc(&pic0,input.n, 0, true);
 
     int i,j,k,t;
 /*Initialize pic*/
@@ -335,7 +335,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	    mv.P++;
 	}
     /*Run EM*/
-	RunStep(&run,&pic,&pic0,PosFix,false,NULL);
+	RunStep(&run,&pic,&pic0,PosFix,false,NULL,true);
     /*Judge break or not*/
         if(run.terminate=='Y')
 	    break;

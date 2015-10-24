@@ -52,11 +52,16 @@ struct RUN{
     double *Y;
     bool *die;  /*spots with an intensity zero*/
     bool *freeze; /*spots didn't move from past few iterations*/
+    int NumNo;
+    struct Sparse *NoDist; /*PSF of noise Particles*/
+    struct Sparse *NoAssign; /*intermedia results for noise estimation*/
 };
 
 struct State{
     int n;
     double no;
+    int NumNo;
+    double *No;
     double *X;
     double *Y;
     double *I;
@@ -82,16 +87,17 @@ struct CPtable
 
 void Sparse_malloc(struct Sparse *Sp, int n);
 void Sparse_free(struct Sparse *Sp);
-void State_malloc(struct State *St, int n);
-void State_free(struct State *St);
-void RUN_free(struct RUN *R);
+void State_malloc(struct State *St, int n, int NumNo, bool EvenNoise);
+void State_free(struct State *St, bool EvenNoise);
+void RUN_free(struct RUN *R, bool EvenNoise);
 void CPtable_malloc(struct CPtable *CP, int NumLambda, int NumMu);
 void CPtable_free(struct CPtable *CP);
 void CPtable_prepare(struct CPtable *CP);
 double calibrated_poisson(double Lambda, double Mu, struct CPtable *CP);
 void PSFGauss(struct Sparse *A, struct RUN *run, int L1, int U1, int L2, int U2, double x, double y, double sigma, int psfdecay);
 void PSFno(double *An, int sbs, double no);
-void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool PositionFix, bool DoCalibration, struct CPtable *CP);
+void UnevenPSFno(double *An, struct Sparse *NoAssign, int sbs, int sb1, int sb2, int NumNo, struct Sparse *NoDist, double *No);
+void RunStep(struct RUN *run, struct State *pic, struct State *pic0, bool PositionFix, bool DoCalibration, struct CPtable *CP, bool EvenNoise);
 
 
 #endif
