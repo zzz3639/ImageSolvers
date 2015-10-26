@@ -1,8 +1,10 @@
 #include"mex.h"
 #include<stdio.h>
 #include<stdlib.h>
-/*Modified in 2015.06.19 by ZHANG Haowen
+/*Modified in 2015.10.26 by ZHANG Haowen
 */
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
 struct MolList
 {
     int n;
@@ -64,42 +66,105 @@ void DeleteDist(struct Dist *D)
     return;
 }
 
-void CalDist(struct MolList *M, struct Dist *D)
+struct Node* CalDist(struct MolList *M, double th)
 {
+    struct Node *Link;
     int i,j,k;
     int n;
     n=M->n;
-    for(i=0;i<n;i++){
-	for(j=i;j<n;j++){
-	    D->D[i][j]=(M->x[i]-M->x[j])*(M->x[i]-M->x[j])+(M->y[i]-M->y[j])*(M->y[i]-M->y[j]);
-	    D->D[j][i]=D->D[i][j];
+    /*Calculate the minimal and maximal value of the Molecule list in both dimensions*/
+    double Dzero=1e-10;
+    double Xmin=1e10,Xmax=-1e10,Ymin=1e10,Ymax=-1e10;
+    for(i=0;i<M->n;i++){
+	if(M->x[i]<Xmin)
+	    Xmin=M->x[i];
+	if(M->x[i]>Xmax)
+	    Xmax=M->x[i];
+	if(M->y[i]<Ymin)
+	    Ymin=M->y[i];
+	if(M->y[i]>Ymax)
+	    Ymax=M->y[i];
+    }
+    /*Indexing the molecules*/
+    double Interval=MAX(th,0.3);
+    int nx,ny;
+    nx=(int)((Xmax-Xmin+Dzero)/Interval)+1;
+    ny=(int)((Ymax-Ymin+Dzero)/Interval)+1;
+    struct Node **PositionIndex;
+    PositionIndex=(struct Node **)malloc(sizeof(struct Node *)*nx);
+    for(i=0;i<nx;i++){
+	PositionIndex[i]=(struct Node *)malloc(sizeof(struct Node)*ny);
+    }
+    for(i=0;i<nx;i++){
+	for(j=0;j<ny;j++){
+	    PositionIndex[i][j].next=NULL;
 	}
     }
-    return;
-}
+    int ix,iy;
+    struct Node *p,*tempp;
+    for(i=0;i<n;i++){
+	ix=(int)((M->x[i]-Xmin+Dzero)/Interval);
+	iy=(int)((M->y[i]-Ymin+Dzero)/Interval);
+	p=(struct Node *)malloc(sizeof(struct Node));
+	p->value=i;
+	p->next=PositionIndex[ix][iy].next;
+	PositionIndex[ix][iy].next=p;
+    }
 
-void DFS(struct Dist *D, double th, struct Group *G)
-{
-    int i,j,k;
-    int n;
-    n=D->n;
-    char find[n];
-    struct Node Link[n];
-    struct Node *P,*TempP,*TempP2,*TempP3;
+    /*Make the linking list*/
+    int iu,ju,id,jd;
+    double th2=th*th;
+    Link=(struct Node *)malloc(sizeof(struct Node)*n);
     for(i=0;i<n;i++){
 	Link[i].next=NULL;
-	for(j=0;j<n;j++){
-	    if(i==j)
-		continue;
-	    if(D->D[i][j]<th*th){
-		P=(struct Node *)malloc(sizeof(struct Node));
-		P->value=j;
-		TempP=Link[i].next;
-		Link[i].next=P;
-		P->next=TempP;
+	ix=(int)((M->x[i]-Xmin+Dzero)/Interval);
+	iy=(int)((M->y[i]-Ymin+Dzero)/Interval);
+	iu=MAX(0,ix-1);
+	ju=MAX(0,iy-1);
+	id=MIN(nx-1,ix+1);
+	jd=MIN(ny-1,iy+1);
+	for(k=iu;k<=id;k++){
+	    for(j=ju;j<=jd;j++){
+		tempp=PositionIndex[k][j].next;
+		while(tempp!=NULL){
+		    if(tempp->value==i){
+			tempp=tempp->next;
+			continue;
+		    }
+		    if((M->x[i]-M->x[tempp->value])*(M->x[i]-M->x[tempp->value])+(M->y[i]-M->y[tempp->value])*(M->y[i]-M->y[tempp->value])<th2){
+			p=(struct Node *)malloc(sizeof(struct Node));
+			p->value=tempp->value;
+			p->next=Link[i].next;
+			Link[i].next=p;
+		    }
+		    tempp=tempp->next;
+		}
 	    }
 	}
     }
+
+    /*free the indexing table*/
+    for(i=0;i<nx;i++){
+	for(j=0;j<ny;j++){
+	    tempp=PositionIndex[i][j].next;
+	    while(tempp!=NULL){
+		p=tempp;
+		tempp=tempp->next;
+		free(p);
+	    }
+	}
+	free(PositionIndex[i]);
+    }
+    free(PositionIndex);
+    
+    return Link;
+}
+
+void DFS(struct Node *Link, int n, struct Group *G)
+{
+    int i,j,k;
+    char find[n];
+    struct Node *P,*TempP,*TempP2,*TempP3;
     for(i=0;i<n;i++){
 	find[i]=0;
     }
@@ -155,6 +220,11 @@ void DFS(struct Dist *D, double th, struct Group *G)
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
+    /*Reading the data*/
+    if(nrhs!=2){
+        mexPrintf("\nM=MergeMex(pic,th)\n");
+	return;
+    }
     double th;
     double *pointread;
     pointread=mxGetPr(prhs[1]);
@@ -169,11 +239,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	*(ML.x+i)=*(pointread+i);
 	*(ML.y+i)=*(pointread+n+i);
     }
-    struct Dist D;
-    CreateDist(&D,n);
-    CalDist(&ML,&D);
+    /*Group the molecules with DFS*/
+    struct Node *Link;
+    Link=CalDist(&ML,th);
     struct Group G;
-    DFS(&D,th,&G);
+    DFS(Link,ML.n,&G);
+    /*Grouping data processing and output*/
     struct Group *TempPG;
     struct Node *TempP;
     int ng=0;
@@ -202,7 +273,30 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	TempPG=TempPG->next;
     }
     DeleteMolList(&ML);
-    DeleteDist(&D);
+    /*free linking list*/
+    struct Node *TempP2;
+    for(i=0;i<n;i++){
+	TempP2=Link[i].next;
+	while(TempP2!=NULL){
+            TempP=TempP2;
+	    TempP2=TempP2->next;
+	    free(TempP);
+	}
+    }
+    free(Link);
+    /*free grouping memory*/
+    TempPG=G.next;
+    while(TempPG!=NULL){
+	TempP2=TempPG->node;
+	while(TempP2!=NULL){
+            TempP=TempP2;
+	    TempP2=TempP2->next;
+	    free(TempP);
+	}
+	G.next=TempPG;
+	TempPG=TempPG->next;
+	free(G.next);
+    }
     return;
 }
 
