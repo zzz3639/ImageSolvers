@@ -93,11 +93,13 @@ void ReadInput(int nrhs ,const mxArray *prhs[], struct InType *input)
     return;
 }
 
-void WriteOutput(int nlhs, mxArray *plhs[], int n, int NumNo, struct State *pic, struct MV *mv, long int seed, int bsize)
+void WriteOutput(int nlhs, mxArray *plhs[], struct RUN *run, struct State *pic, struct MV *mv, long int seed, int bsize)
 {
     if(nlhs<1)
         return;
 /*Write pic and no to the output*/
+    int n,NumNo;
+    n=run->n; NumNo=run->NumNo;
     plhs[0]=mxCreateNumericMatrix(n,3,mxDOUBLE_CLASS,mxREAL);
     double *point;
     point=mxGetPr(plhs[0]);
@@ -157,8 +159,22 @@ void WriteOutput(int nlhs, mxArray *plhs[], int n, int NumNo, struct State *pic,
 
     if(nlhs<4)
 	return;
-    plhs[3]=mxCreateNumericMatrix(1,1,mxINT64_CLASS,mxREAL);
-    point=mxGetPr(plhs[3]);
+    plhs[3]=mxCreateCellMatrix(NumNo, 1);
+    for(i=0;i<NumNo;i++){
+	pv=mxCreateNumericMatrix(run->NoDist[i].n,3,mxDOUBLE_CLASS,mxREAL);
+	point=mxGetPr(pv);
+	for(j=0;j<run->NoDist[i].n;j++){
+	    *(point+j)=run->NoDist[i].X[j];
+	    *(point+run->NoDist[i].n+j)=run->NoDist[i].Y[j];
+	    *(point+2*run->NoDist[i].n+j)=run->NoDist[i].V[j];
+	}
+	mxSetCell(plhs[3],i,pv);
+    }
+
+    if(nlhs<5)
+	return;
+    plhs[4]=mxCreateNumericMatrix(1,1,mxINT64_CLASS,mxREAL);
+    point=mxGetPr(plhs[4]);
     *((long int *)point)=seed;
 
 }
@@ -282,7 +298,7 @@ void Initialize(struct InType *input, struct RUN *R)
 	    Sparse_malloc(R->NoDist+idxno,LengthPsfnoThis);
 	    Sparse_malloc(R->NoAssign+idxno,LengthPsfnoThis);
 	    k=0;
-	    SumPsfnoThis;
+	    SumPsfnoThis=0;
 	    for(ig=gidx1[i]+1;ig<gidx1[i+2];ig++){
 		for(jg=gidx2[j]+1;jg<gidx2[j+2];jg++){
                     R->NoDist[idxno].X[k]=ig;
@@ -344,7 +360,7 @@ void FreeMem(struct RUN *run, struct InType *input, struct MV *mv, struct State 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
     if(nrhs!=9&&nrhs!=10){
-        mexErrMsgTxt("\nparameter number incorrect!\nUsage:\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,[g1,g2],Lambda,[int64(NIte)])\nOr\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,[g1,g2],Lambda,[NIte,Seed])\nOr\n [pic,no,mv,seed]=EMboundarysparse(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,[g1,g2],Lambda,[int64(NIte)],MV0)\n");
+        mexErrMsgTxt("\nparameter number incorrect!\nUsage:\n [pic,no,mv,PSFNo,seed]=EMUneven(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,[g1,g2],Lambda,[int64(NIte)])\nOr\n [pic,no,mv,PSFNo,seed]=EMUneven(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,[g1,g2],Lambda,[NIte,Seed])\nOr\n [pic,no,mv,PSFNo,seed]=EMUneven(b,n,sigma,[MaxIte,Izero,Pzero],bsize,psfdecay,[g1,g2],Lambda,[int64(NIte)],MV0)\n");
         return;
     }
     struct InType input;
@@ -367,6 +383,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     int i,j,k,t;
 /*Initialize pic*/
+    input.NumNo=run.NumNo;
     {
         if(nrhs==9){
 	    if(input.seed<0){
@@ -409,7 +426,6 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	    }
 	}
     }
-    input.NumNo=run.NumNo;
     PrintInput(&input);
 
 /*Run EM*/
@@ -443,7 +459,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     else
 	mexPrintf("\nFinished, converge after %d iterations\n\n",t);
     mv.T=t;
-    WriteOutput(nlhs,plhs,input.n,input.NumNo,&pic,&mv,input.seed,input.bsize);
+    WriteOutput(nlhs,plhs,&run,&pic,&mv,input.seed,input.bsize);
     FreeMem(&run,&input,&mv,&pic,&pic0);
 
     return;
