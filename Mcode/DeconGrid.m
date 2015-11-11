@@ -1,6 +1,7 @@
 function [ HighImg, mv ] = DeconGrid( Img, OptPara, Lambda, Grid, MaxIte, EvenNoise, MvRate, NoiseGridSize )
-%DECONGRID Summary of this function goes here
-%   Detailed explanation goes here
+% Do deconvolution using SparseGMM
+%   Usage: [ HighImg, mv ] = DeconGrid( Img, OptPara, Lambda, Grid, MaxIte, EvenNoise, MvRate, NoiseGridSize )
+%      OptPara=[Sigma, boundarysize, psfdecay] 
 s1=size(Img,1);
 s2=size(Img,2);
 

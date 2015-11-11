@@ -88,7 +88,7 @@ if EvenNoise==1
     [picp,nop,mv]=EMSparseSmoothMex(bm,size(mvthis.pic,1),sigma,[MaxIte0,Izero,Pzero],bsize,bdecay,Lambda,[int64(10000)],mvthis);
     psfno=ones(s1+2*bsize,s2+2*bsize)/(s1+2*bsize)/(s2+2*bsize);
 else
-    [picp,nop,mv,psfno]=EMSparseSmoothMex(bm,size(mvthis.pic,1),sigma,[MaxIte0,Izero,Pzero],bsize,bdecay,[NoiseGridSize1,NoiseGridSize2],Lambda,[int64(10000)],mvthis);
+    [picp,nop,mv,psfno]=EMSparseUnevenMex(bm,size(mvthis.pic,1),sigma,[MaxIte0,Izero,Pzero],bsize,bdecay,[NoiseGridSize1,NoiseGridSize2],Lambda,[int64(10000)],mvthis);
 end
 picp=Merge(picp,MergeDist,MolZero);
 mvthis.pic=picp;
@@ -96,7 +96,7 @@ mvthis.no=nop;
 if EvenNoise==1
     [pic,no]=EMSparseSmoothMex(bm,size(mvthis.pic,1),sigma,[MaxIte,Izero,Pzero],bsize,bdecay,Lambda,[int64(10000)],mvthis);
 else
-    [pic,no]=EMSparseSmoothMex(bm,size(mvthis.pic,1),sigma,[MaxIte,Izero,Pzero],bsize,bdecay,[NoiseGridSize1,NoiseGridSize2],Lambda,[int64(10000)],mvthis);
+    [pic,no]=EMSparseUnevenMex(bm,size(mvthis.pic,1),sigma,[MaxIte,Izero,Pzero],bsize,bdecay,[NoiseGridSize1,NoiseGridSize2],Lambda,[int64(10000)],mvthis);
 end
 
 end
