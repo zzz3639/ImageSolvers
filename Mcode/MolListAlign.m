@@ -1,6 +1,7 @@
 function [ Result ] = MolListAlign(Pic, PicTrue)
-%MOLLISTALIGN Summary of this function goes here
-%   Detailed explanation goes here
+% Usage: [ Result ] = MolListAlign(Pic, PicTrue)
+%   Pic is the estimated molecule list, in which first 2 columns record positions
+%   PicTrue is the true answer
 D=dist(Pic(:,1:2),PicTrue(:,1:2));
 [u,v]=min(D);
 Result=[Pic(:,1:2),Pic(:,3),(min(D,[],1))',Pic(:,1:2)-PicTrue(v,1:2),v'];

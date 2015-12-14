@@ -1,7 +1,7 @@
 function [ pic, no, mv, psfno] = FastSolver( Img, NumMol, Lambda, OptPara, Tolerance, ProcessPara )
 %REVERSELASSO Summary of this function goes here
 % Modified by Zhang Haowen in 2015.10.28
-% Usage: [ pic, no, mv ] = FastSolver( Img, NumMol, Lambda, OptPara, Tolerance, ProcessPara )
+% Usage: [ pic, no, mv, psfno] = FastSolver( Img, NumMol, Lambda, OptPara, Tolerance, ProcessPara )
 % Input variables:
 %   Img: m by n matrix, raw image
 %   NumMol: number of initial molecules, before merge. Integer

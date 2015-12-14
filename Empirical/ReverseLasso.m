@@ -1,4 +1,4 @@
-function [ Results, IniMv ] = ReverseLasso( Img, NumMol, LambdaPath, OptPara, Tolerance, ProcessPara )
+function [ Results, IniMv, LinkPath ] = ReverseLasso( Img, NumMol, LambdaPath, OptPara, Tolerance, ProcessPara )
 %REVERSELASSO Summary of this function goes here
 % Modified by Zhang Haowen in 2015.07.10
 % Input variables:
@@ -18,6 +18,8 @@ function [ Results, IniMv ] = ReverseLasso( Img, NumMol, LambdaPath, OptPara, To
 %      Results under each lambda.
 %   IniMv:
 %      Initial molecules table before optimization.
+%   LinkPath:
+%      Record merge events through the LambdaPath.
 
 %%% plant random seed
 rng('shuffle');

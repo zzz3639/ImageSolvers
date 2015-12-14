@@ -1,6 +1,8 @@
-function [ Mres ] = Merge( pic, th, Izero)
-%   Modified in 2015.06.20 by ZHANG Haowen
-%   Detailed explanation goes here
+function [ Mres, Index ] = Merge( pic, th, Izero)
+% Modified in 2015.12.04 by ZHANG Haowen
+%  Output:
+%    Mres: Mres is the merged results, its length equals to number of merged groups.
+%    Index: which merges to which, length equals to pic.
 n=size(pic,1);
 Remove=pic(:,3)<Izero;
 picR=zeros(n-sum(Remove),size(pic,2));
@@ -30,6 +32,9 @@ for i=1:n
 end
 
 Mres(:,1:2)=Mres(:,1:2)./repmat(Mres(:,3),1,2);
+[u,v]=sort(M(:,3));
+Index=zeros(size(M,1),1);
+Index=M(v,4);
 
 end
 
