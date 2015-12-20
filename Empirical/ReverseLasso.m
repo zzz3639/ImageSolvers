@@ -66,6 +66,7 @@ pic(:,3)=pic(:,3)*scale;
 
 %%% Define output variable
 Results=cell(length(LambdaPath),1);
+LinkPath=cell(length(LambdaPath),1);
 
 %%% Run Sparse Solver with each value in LambdaPath
 mvthis.pic=pic;
@@ -74,10 +75,11 @@ IniMv=mvthis;
 for l=1:length(LambdaPath)
     lambda=LambdaPath(l);
     [picthis0,nothis]=EMSparseSmoothMex(bm,size(mvthis.pic,1),sigma,[MaxIte,Izero,Pzero],bsize,bdecay,lambda,[int64(10000)],mvthis);
-    picthis=Merge(picthis0,MergeDist,MolZero);
+    [picthis,indexthis]=Merge(picthis0,MergeDist,MolZero);
     mvthis.pic=picthis;
     mvthis.no=nothis;
     Results{l}=mvthis;
+    LinkPath{l}=indexthis;
 end
 
 end
