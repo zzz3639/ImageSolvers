@@ -7,7 +7,7 @@ function [ Img ] = SiliconImaging( m, s, pic, no, sigma, obnoise )
 %    pic=[X,Y,Intensity], molecule list
 %    no: noise, count by photon number
 %    sigma: PSF width
-%    obnoise: Additional noise, for each pixel, signal=photoncount*(1+obnoise*randn)
+%    obnoise: Additional noise, for each pixel, signal=photoncount+sqrt(photoncount)*rand()*obnoise
 
 %%% initialize
 rng('shuffle');
@@ -37,7 +37,7 @@ end
 for i=1:m
     img=Img{i};
     imgb=zeros(size(img));
-    imgb=img.*(1+obnoise*randn(s1,s2));
+    imgb=img+obnoise*randn(s1,s2).*sqrt(img);
     imgb=imgb-(imgb<0).*imgb;
     Img{i}=imgb;
 end

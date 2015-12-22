@@ -1,10 +1,11 @@
-function [NoScale, Pic, No] = NoiseEst(Img, Sigma, NTrial, Lambda0)
+function [NoScale, Pic, No] = NoiseEstFast( Img, Sigma, Lambda0 )
 % Usage: [NoScale, Pic, No] = NoiseEst(Img, Sigma, NTrial, Lambda0)
-% This fundtion estimate photon-signal noise of Img by binary search.
+% This fundtion estimate photon-signal noise of Img by directly compute obnoise.
 %   Input:
 %   Output: 
 %     NoScale: signal=photoncount+sqrt(photoncount)*rand()*obnoise;
 %     Pic, No: result of Lambda0
+
 
 %%% Define some useful constants  
 MaxIte0=500;
@@ -25,35 +26,14 @@ rng('shuffle');
 S1=size(Img,1);
 S2=size(Img,2);
 NumMol=floor(size(Img,1)*size(Img,2)/50/Sigma/Sigma*20);
-SearchMin=0;
-SearchMax=5;
-SearchBar=0.1;
 
 %%% Run RunSolverTunning.m and get squared error
 [Pic,No,Error]=ErrorEst(Img, NumMol, Lambda0, [Sigma,bsize,bdecay], ...
 [MaxIte0,MaxIteFast,IzeroSolver,PzeroSolver], [MaxIteTunning,IzeroSolver,PzeroSolver], ...
 [MergeDist*Sigma,MolZero], [MergeDist*Sigma,MolZero,FoldRemain]);
 
-%%% Estimate NoiseScale by binary search and SiliconImaging
-while SearchMax-SearchMin>SearchBar
-    ObNoise=(SearchMax+SearchMin)/2;
-    [ImgSilicon] = SiliconImaging(NTrial, [S1,S2], Pic, No, Sigma,ObNoise);
-    ErrorThisAve=0;
-    for i=1:NTrial
-        [PicThis,NoThis,ErrorThis]=ErrorEst(ImgSilicon{i},NumMol, Lambda0, [Sigma,bsize,bdecay], ...
-        [MaxIte0,MaxIteFast,IzeroTrial,PzeroTrial], [MaxIteTunning,IzeroTrial,PzeroTrial], ...
-        [MergeDist*Sigma,MolZero], [MergeDist*Sigma,MolZero,FoldRemain]);
-        ErrorThisAve=ErrorThisAve+ErrorThis;
-    end
-    ErrorThisAve=ErrorThisAve/NTrial;
-    if Error>ErrorThisAve
-        SearchMin=ObNoise;
-    else
-        SearchMax=ObNoise;
-    end
-end
+NoScale=sqrt(Error/sum(sum(Img))-1);
 
-NoScale=(SearchMax+SearchMin)/2;
 
 end
 
@@ -79,6 +59,7 @@ function [Pic,No,Error]=ErrorEst(Img,NumMol,Lambda0,OptPara,StopPara1,StopPara2,
     Error=sum(sum((Img-ImgReal).^2));
 end
 
+%noise distribution
 function b2=Noise(s1,s2,PhotonNum)
     b2=mnrnd(PhotonNum,repmat(1/s1/s2,s1*s2,1));
 end
@@ -88,5 +69,4 @@ function V=PSF(mu,cx,sig)
     V=normpdf(cx(:,1),mu(1),sig).*normpdf(cx(:,2),mu(2),sig);
     V=V/sum(V);
 end
-
 
