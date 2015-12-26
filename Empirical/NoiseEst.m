@@ -13,7 +13,7 @@ MaxIteTunning=5000;
 IzeroSolver=sum(sum(Img))*1e-5;
 PzeroSolver=1e-4;
 IzeroTrial=sum(sum(Img))*1e-5;
-PzeroTrial=1e-5;
+PzeroTrial=1e-4;
 bsize=4;
 bdecay=5;
 MergeDist=0.1;
@@ -27,7 +27,7 @@ S2=size(Img,2);
 NumMol=floor(size(Img,1)*size(Img,2)/50/Sigma/Sigma*20);
 SearchMin=0;
 SearchMax=5;
-SearchBar=0.1;
+SearchBar=0.2;
 
 %%% Run RunSolverTunning.m and get squared error
 [Pic,No,Error]=ErrorEst(Img, NumMol, Lambda0, [Sigma,bsize,bdecay], ...

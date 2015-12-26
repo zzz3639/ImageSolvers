@@ -1,6 +1,7 @@
 function [Losses] = EmpiricalLoss( Img, Sigma, EstPara, PathPara, LambdaPath )
 %EMPIRICALLOSS Summary of this function goes here
 %Usage: [Losses] = EmpiricalLoss(Img,Sigma,[Lambda0,N_Est],[Nrepeats,MaxIteNode,IzeroNode,PzeroNode],LambdaPath)
+%  
 
 %%% Initialize
 Nrepeats=PathPara(1);
@@ -12,13 +13,26 @@ S2=size(Img,2);
 n=length(LambdaPath);
 NumMol=floor(size(Img,1)*size(Img,2)/50/Sigma/Sigma*20);
 bsize=4;
-bdecay=5;
+psfdecay=5;
+LambdaForNoise=0.2;
 MergeDist=0.1;
 MolZero=0.5;
+FoldRemain=0.99;
 FilterFold=0.75;
+MaxIte0=500;
+MaxIteFast=5000;
+MaxIteTunning=5000;
+IzeroSolver=sum(sum(Img))*1e-6;
+PzeroSolver=1e-5;
+
 
 %%% Estimate molecule list and noise scale
-[NoScale, Pic, No] = NoiseEst(Img, Sigma, EstPara(2), EstPara(1));
+[NoScale] = NoiseEst(Img, Sigma, EstPara(2), LambdaForNoise);
+
+[Pic,NoB]=RunSolverTunning(Img, NumMol, EstPara(1), [Sigma,bsize,psfdecay], [MaxIte0,MaxIteFast,IzeroSolver,PzeroSolver], ...
+[MaxIteTunning,IzeroSolver,PzeroSolver], [MergeDist*Sigma,MolZero], [MergeDist*Sigma,MolZero,FoldRemain]);
+
+No=NoB/(S1+2*bsize)/(S2+2*bsize)*S1*S2;
 
 %%% Generate new image series based on noise scale
 [ImgSilicon] = SiliconImaging(Nrepeats, [S1,S2], Pic, No, Sigma,NoScale);
@@ -26,7 +40,7 @@ FilterFold=0.75;
 %%% Run ReverseLasso through LambdaPath and Calculate Empirical loss
 Losses=zeros(n,1);
 for t=1:Nrepeats
-    [ResultsPath] = ReverseLasso(ImgSilicon{t}, NumMol, LambdaPath, [Sigma,bsize,bdecay], ...
+    [ResultsPath] = ReverseLasso(ImgSilicon{t}, NumMol, LambdaPath, [Sigma,bsize,psfdecay], ...
     [MaxIteNode,IzeroNode,PzeroNode], [MergeDist*Sigma,MolZero]);
     for i=1:n
         PicThis=ResultsPath{i}.pic;
