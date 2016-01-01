@@ -9,7 +9,7 @@ for i=1:L
     [AlignThis]=MolListAlign(Pic, TrueAns);
     Prob=Ints2Prob(AlignThis(:,3),0.75);
     E=sum(Prob.*AlignThis(:,4))/sum(Prob);
-    Losses{i}=[Prob,AlignThis(:,4)];
+    Losses{i}=[Prob,AlignThis(:,3:4)];
     %E=mean(AlignThis(:,4));
     Loss(i)=E;
 end
