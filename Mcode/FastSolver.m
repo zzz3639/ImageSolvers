@@ -1,4 +1,4 @@
-function [ pic, no, mv, psfno] = FastSolver( Img, NumMol, Lambda, OptPara, Tolerance, ProcessPara )
+function [ pic, no, mv, psfno] = FastSolver( Img, NumMol, Lambda, optPARA, Tolerance, ProcessPara )
 %REVERSELASSO Summary of this function goes here
 % Modified by Zhang Haowen in 2015.10.28
 % Usage: [ pic, no, mv, psfno] = FastSolver( Img, NumMol, Lambda, OptPara, Tolerance, ProcessPara )
@@ -28,10 +28,10 @@ rng('shuffle');
 
 %%% parameter initialize
 n=NumMol;
-sigma=OptPara(1);
-bsize=OptPara(2);
-bdecay=OptPara(3);
-if length(OptPara)==3
+sigma=optPARA(1);
+bsize=optPARA(2);
+bdecay=optPARA(3);
+if length(optPARA)==3
     EvenNoise=1;
 else
     EvenNoise=0;

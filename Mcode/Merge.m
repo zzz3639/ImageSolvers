@@ -8,6 +8,11 @@ function [ Mres, Index ] = Merge( pic, th, Izero)
 %    th: length within which 2 points are merged.
 %    Izero: Points lower than this intensity are ignored.
 n=size(pic,1);
+if n==0
+    Mres=zeros(0,3);
+    Index=zeros(0,1);
+    return;
+end
 Remove=pic(:,3)<Izero;
 picR=zeros(n-sum(Remove),size(pic,2));
 Index1=zeros(n,1);
